@@ -698,6 +698,9 @@ export type DAGRunResponse = {
     bundle_version: string | null;
     dag_display_name: string;
     partition_key: string | null;
+    total_cpu_seconds?: number | null;
+    max_rss_mb?: number | null;
+    task_count_with_metrics?: number | null;
 };
 
 /**
@@ -1445,6 +1448,9 @@ export type TaskInstanceResponse = {
     trigger: TriggerResponse | null;
     triggerer_job: JobResponse | null;
     dag_version: DagVersionResponse | null;
+    cpu_seconds?: number | null;
+    max_rss_mb?: number | null;
+    execution_platform?: string | null;
 };
 
 /**

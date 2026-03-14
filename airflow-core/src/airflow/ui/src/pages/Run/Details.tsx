@@ -84,6 +84,18 @@ export const Details = () => {
           <Table.Cell>{translate("duration")}</Table.Cell>
           <Table.Cell>{getDuration(dagRun.start_date, dagRun.end_date)}</Table.Cell>
         </Table.Row>
+        {dagRun.total_cpu_seconds != null && (
+          <Table.Row>
+            <Table.Cell>{translate("dagRun.totalCpuSeconds")}</Table.Cell>
+            <Table.Cell>{dagRun.total_cpu_seconds.toFixed(2)}</Table.Cell>
+          </Table.Row>
+        )}
+        {dagRun.max_rss_mb != null && (
+          <Table.Row>
+            <Table.Cell>{translate("dagRun.maxRssMb")}</Table.Cell>
+            <Table.Cell>{dagRun.max_rss_mb.toFixed(2)}</Table.Cell>
+          </Table.Row>
+        )}
         <Table.Row>
           <Table.Cell>{translate("dagRun.lastSchedulingDecision")}</Table.Cell>
           <Table.Cell>

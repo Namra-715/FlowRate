@@ -464,6 +464,11 @@ def _create_ti_state_update_query_and_update_state(
             query = TI.duration_expression_update(ti_patch_payload.end_date, query, session.bind)
         query = query.values(state=updated_state, next_method=None, next_kwargs=None)
 
+        if ti is not None:
+            for attr in ("cpu_seconds", "max_rss_mb", "execution_platform"):
+                if getattr(ti_patch_payload, attr, None) is not None:
+                    setattr(ti, attr, getattr(ti_patch_payload, attr))
+
         if updated_state == TaskInstanceState.FAILED:
             # This is the only case needs extra handling for TITerminalStatePayload
             if ti is not None:

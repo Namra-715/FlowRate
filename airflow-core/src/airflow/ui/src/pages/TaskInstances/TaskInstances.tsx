@@ -197,6 +197,18 @@ const taskInstanceColumns = ({
     header: translate("duration"),
   },
   {
+    accessorKey: "cpu_seconds",
+    cell: ({ row: { original } }) =>
+      original.cpu_seconds != null ? original.cpu_seconds.toFixed(2) : "—",
+    header: translate("taskInstance.cpuSeconds"),
+  },
+  {
+    accessorKey: "max_rss_mb",
+    cell: ({ row: { original } }) =>
+      original.max_rss_mb != null ? original.max_rss_mb.toFixed(2) : "—",
+    header: translate("taskInstance.maxRssMb"),
+  },
+  {
     accessorKey: "dag_version",
     cell: ({ row: { original } }) => <DagVersion version={original.dag_version} />,
     enableSorting: false,

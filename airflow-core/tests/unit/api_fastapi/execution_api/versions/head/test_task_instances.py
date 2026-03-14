@@ -1440,6 +1440,49 @@ class TestTIUpdateState:
         assert tih.task_instance_id
         assert tih.task_instance_id != ti.id
 
+    def test_ti_update_state_to_success_stores_resource_metrics(
+        self, client, session, create_task_instance
+    ):
+        """Resource metrics in success payload are persisted on TaskInstance and TaskInstanceHistory."""
+        ti = create_task_instance(
+            task_id="test_ti_resource_metrics",
+            state=State.RUNNING,
+            start_date=DEFAULT_START_DATE,
+        )
+        session.commit()
+
+        response = client.patch(
+            f"/execution/task-instances/{ti.id}/state",
+            json={
+                "state": "success",
+                "end_date": DEFAULT_END_DATE.isoformat(),
+                "cpu_seconds": 12.5,
+                "max_rss_mb": 128.0,
+                "execution_platform": "local",
+            },
+        )
+
+        assert response.status_code == 204
+        session.expire_all()
+
+        ti = session.get(TaskInstance, ti.id)
+        assert ti.cpu_seconds == 12.5
+        assert ti.max_rss_mb == 128.0
+        assert ti.execution_platform == "local"
+
+        tih = session.scalar(
+            select(TaskInstanceHistory).where(
+                TaskInstanceHistory.dag_id == ti.dag_id,
+                TaskInstanceHistory.run_id == ti.run_id,
+                TaskInstanceHistory.task_id == ti.task_id,
+                TaskInstanceHistory.try_number == ti.try_number,
+            )
+        )
+        assert tih is not None
+        assert tih.cpu_seconds == 12.5
+        assert tih.max_rss_mb == 128.0
+        assert tih.execution_platform == "local"
+
     @pytest.mark.parametrize(
         "target_state",
         [

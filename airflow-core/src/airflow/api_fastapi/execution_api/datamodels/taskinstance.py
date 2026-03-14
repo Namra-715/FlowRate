@@ -84,6 +84,9 @@ class TITerminalStatePayload(StrictBaseModel):
     end_date: UtcDateTime
     """When the task completed executing"""
     rendered_map_index: str | None = None
+    cpu_seconds: float | None = None
+    max_rss_mb: float | None = None
+    execution_platform: str | None = None
 
 
 class TISuccessStatePayload(StrictBaseModel):
@@ -107,6 +110,9 @@ class TISuccessStatePayload(StrictBaseModel):
     task_outlets: Annotated[list[AssetProfile], Field(default_factory=list)]
     outlet_events: Annotated[list[dict[str, Any]], Field(default_factory=list)]
     rendered_map_index: str | None = None
+    cpu_seconds: float | None = None
+    max_rss_mb: float | None = None
+    execution_platform: str | None = None
 
 
 class TITargetStatePayload(StrictBaseModel):
@@ -184,6 +190,9 @@ class TIRetryStatePayload(StrictBaseModel):
     ]
     end_date: UtcDateTime
     rendered_map_index: str | None = None
+    cpu_seconds: float | None = None
+    max_rss_mb: float | None = None
+    execution_platform: str | None = None
 
 
 class TISkippedDownstreamTasksStatePayload(StrictBaseModel):

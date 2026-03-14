@@ -741,6 +741,9 @@ class TaskState(BaseModel):
     end_date: datetime | None = None
     type: Literal["TaskState"] = "TaskState"
     rendered_map_index: str | None = None
+    cpu_seconds: float | None = None
+    max_rss_mb: float | None = None
+    execution_platform: str | None = None
 
 
 class SucceedTask(TISuccessStatePayload):

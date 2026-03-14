@@ -112,6 +112,12 @@ export const Header = ({ dagRun }: { readonly dagRun: DAGRunResponse }) => {
           { label: translate("startDate"), value: <Time datetime={dagRun.start_date} /> },
           { label: translate("endDate"), value: <Time datetime={dagRun.end_date} /> },
           { label: translate("duration"), value: getDuration(dagRun.start_date, dagRun.end_date) },
+          ...(dagRun.total_cpu_seconds != null
+            ? [{ label: translate("dagRun.totalCpuSeconds"), value: dagRun.total_cpu_seconds.toFixed(2) }]
+            : []),
+          ...(dagRun.max_rss_mb != null
+            ? [{ label: translate("dagRun.maxRssMb"), value: dagRun.max_rss_mb.toFixed(2) }]
+            : []),
           ...(dagRun.triggering_user_name === null
             ? []
             : [

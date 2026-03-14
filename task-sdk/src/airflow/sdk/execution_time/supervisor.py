@@ -1266,6 +1266,9 @@ class ActivitySubprocess(WatchedSubprocess):
                 task_outlets=msg.task_outlets,
                 outlet_events=msg.outlet_events,
                 rendered_map_index=self._rendered_map_index,
+                cpu_seconds=getattr(msg, "cpu_seconds", None),
+                max_rss_mb=getattr(msg, "max_rss_mb", None),
+                execution_platform=getattr(msg, "execution_platform", None),
             )
         elif isinstance(msg, RetryTask):
             self._terminal_state = msg.state
@@ -1275,6 +1278,9 @@ class ActivitySubprocess(WatchedSubprocess):
                 id=self.id,
                 end_date=msg.end_date,
                 rendered_map_index=self._rendered_map_index,
+                cpu_seconds=getattr(msg, "cpu_seconds", None),
+                max_rss_mb=getattr(msg, "max_rss_mb", None),
+                execution_platform=getattr(msg, "execution_platform", None),
             )
         elif isinstance(msg, GetConnection):
             conn = self.client.connections.get(msg.conn_id)

@@ -25,7 +25,7 @@ from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import joinedload
 
 from airflow.api.common.mark_tasks import (
@@ -85,6 +85,7 @@ from airflow.api_fastapi.logging.decorators import action_logging
 from airflow.listeners.listener import get_listener_manager
 from airflow.models import DagModel, DagRun
 from airflow.models.asset import AssetEvent
+from airflow.models.taskinstance import TaskInstance as TI
 from airflow.models.dag_version import DagVersion
 from airflow.utils.state import DagRunState
 from airflow.utils.types import DagRunTriggeredByType, DagRunType
@@ -113,7 +114,33 @@ def get_dag_run(dag_id: str, dag_run_id: str, session: SessionDep) -> DAGRunResp
             f"The DagRun with dag_id: `{dag_id}` and run_id: `{dag_run_id}` was not found",
         )
 
-    return dag_run
+    row = session.execute(
+        select(
+            func.coalesce(func.sum(TI.cpu_seconds), 0.0),
+            func.coalesce(func.max(TI.max_rss_mb), 0.0),
+            func.count(TI.id),
+        ).where(
+            TI.dag_id == dag_id,
+            TI.run_id == dag_run_id,
+            TI.cpu_seconds.isnot(None),
+        )
+    ).one_or_none()
+    total_cpu_seconds = None
+    max_rss_mb = None
+    task_count_with_metrics = None
+    if row and row[2] > 0:
+        total_cpu_seconds = float(row[0])
+        max_rss_mb = float(row[1])
+        task_count_with_metrics = int(row[2])
+
+    resp = DAGRunResponse.model_validate(dag_run)
+    return resp.model_copy(
+        update={
+            "total_cpu_seconds": total_cpu_seconds,
+            "max_rss_mb": max_rss_mb,
+            "task_count_with_metrics": task_count_with_metrics,
+        }
+    )
 
 
 @dag_run_router.delete(

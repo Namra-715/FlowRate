@@ -259,6 +259,9 @@ class TIRetryStatePayload(BaseModel):
     state: Annotated[Literal["up_for_retry"] | None, Field(title="State")] = "up_for_retry"
     end_date: Annotated[AwareDatetime, Field(title="End Date")]
     rendered_map_index: Annotated[str | None, Field(title="Rendered Map Index")] = None
+    cpu_seconds: Annotated[float | None, Field(title="Cpu Seconds")] = None
+    max_rss_mb: Annotated[float | None, Field(title="Max Rss Mb")] = None
+    execution_platform: Annotated[str | None, Field(title="Execution Platform")] = None
 
 
 class TISkippedDownstreamTasksStatePayload(BaseModel):
@@ -285,6 +288,9 @@ class TISuccessStatePayload(BaseModel):
     task_outlets: Annotated[list[AssetProfile] | None, Field(title="Task Outlets")] = None
     outlet_events: Annotated[list[dict[str, Any]] | None, Field(title="Outlet Events")] = None
     rendered_map_index: Annotated[str | None, Field(title="Rendered Map Index")] = None
+    cpu_seconds: Annotated[float | None, Field(title="Cpu Seconds")] = None
+    max_rss_mb: Annotated[float | None, Field(title="Max Rss Mb")] = None
+    execution_platform: Annotated[str | None, Field(title="Execution Platform")] = None
 
 
 class TITargetStatePayload(BaseModel):
@@ -562,6 +568,9 @@ class TITerminalStatePayload(BaseModel):
     state: TerminalStateNonSuccess
     end_date: Annotated[AwareDatetime, Field(title="End Date")]
     rendered_map_index: Annotated[str | None, Field(title="Rendered Map Index")] = None
+    cpu_seconds: Annotated[float | None, Field(title="Cpu Seconds")] = None
+    max_rss_mb: Annotated[float | None, Field(title="Max Rss Mb")] = None
+    execution_platform: Annotated[str | None, Field(title="Execution Platform")] = None
 
 
 class AssetEventDagRunReference(BaseModel):

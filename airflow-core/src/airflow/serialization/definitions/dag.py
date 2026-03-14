@@ -105,6 +105,7 @@ class SerializedDAG:
     disable_bundle_versioning: bool = False
     doc_md: str | None = None
     edge_info: dict[str, dict[str, EdgeInfoType]] = attrs.field(factory=dict)
+    enable_cost_metrics: bool = False
     end_date: datetime.datetime | None = None
     fail_fast: bool = False
     has_on_failure_callback: bool = False
@@ -154,6 +155,7 @@ class SerializedDAG:
                 "disable_bundle_versioning",
                 "doc_md",
                 "edge_info",
+                "enable_cost_metrics",
                 "end_date",
                 "fail_fast",
                 "fileloc",
