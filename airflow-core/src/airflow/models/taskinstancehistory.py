@@ -23,6 +23,7 @@ from uuid import UUID
 
 import dill
 from sqlalchemy import (
+    BigInteger,
     JSON,
     DateTime,
     Float,
@@ -84,6 +85,9 @@ class TaskInstanceHistory(Base):
     cpu_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
     max_rss_mb: Mapped[float | None] = mapped_column(Float, nullable=True)
     execution_platform: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    avg_cpu_cores: Mapped[float | None] = mapped_column(Float, nullable=True)
+    read_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    write_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     state: Mapped[str | None] = mapped_column(String(20), nullable=True)
     max_tries: Mapped[int | None] = mapped_column(Integer, server_default="-1", nullable=True)
     hostname: Mapped[str | None] = mapped_column(String(1000), nullable=True)

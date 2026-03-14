@@ -97,6 +97,18 @@ class DAGRunResponse(BaseModel):
         default=None,
         description="Number of tasks in this run that reported resource metrics.",
     )
+    avg_cpu_cores: float | None = Field(
+        default=None,
+        description="Average CPU cores used (total_cpu_seconds / run duration) for this run.",
+    )
+    total_read_bytes: int | None = Field(
+        default=None,
+        description="Sum of task read_bytes for this run (I/O).",
+    )
+    total_write_bytes: int | None = Field(
+        default=None,
+        description="Sum of task write_bytes for this run (I/O).",
+    )
 
 
 class DAGRunCollectionResponse(BaseModel):

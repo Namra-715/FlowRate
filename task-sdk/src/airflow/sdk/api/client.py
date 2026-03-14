@@ -237,6 +237,9 @@ class TaskInstanceOperations:
         cpu_seconds: float | None = None,
         max_rss_mb: float | None = None,
         execution_platform: str | None = None,
+        avg_cpu_cores: float | None = None,
+        read_bytes: int | None = None,
+        write_bytes: int | None = None,
     ):
         """Tell the API server that this TI has failed and reached a up_for_retry state."""
         body = TIRetryStatePayload(
@@ -245,6 +248,9 @@ class TaskInstanceOperations:
             cpu_seconds=cpu_seconds,
             max_rss_mb=max_rss_mb,
             execution_platform=execution_platform,
+            avg_cpu_cores=avg_cpu_cores,
+            read_bytes=read_bytes,
+            write_bytes=write_bytes,
         )
         self.client.patch(f"task-instances/{id}/state", content=body.model_dump_json())
 
@@ -259,6 +265,9 @@ class TaskInstanceOperations:
         cpu_seconds: float | None = None,
         max_rss_mb: float | None = None,
         execution_platform: str | None = None,
+        avg_cpu_cores: float | None = None,
+        read_bytes: int | None = None,
+        write_bytes: int | None = None,
     ):
         """Tell the API server that this TI has succeeded."""
         body = TISuccessStatePayload(
@@ -269,6 +278,9 @@ class TaskInstanceOperations:
             cpu_seconds=cpu_seconds,
             max_rss_mb=max_rss_mb,
             execution_platform=execution_platform,
+            avg_cpu_cores=avg_cpu_cores,
+            read_bytes=read_bytes,
+            write_bytes=write_bytes,
         )
         self.client.patch(f"task-instances/{id}/state", content=body.model_dump_json())
 

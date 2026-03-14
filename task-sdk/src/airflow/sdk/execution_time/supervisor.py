@@ -1269,6 +1269,9 @@ class ActivitySubprocess(WatchedSubprocess):
                 cpu_seconds=getattr(msg, "cpu_seconds", None),
                 max_rss_mb=getattr(msg, "max_rss_mb", None),
                 execution_platform=getattr(msg, "execution_platform", None),
+                avg_cpu_cores=getattr(msg, "avg_cpu_cores", None),
+                read_bytes=getattr(msg, "read_bytes", None),
+                write_bytes=getattr(msg, "write_bytes", None),
             )
         elif isinstance(msg, RetryTask):
             self._terminal_state = msg.state
@@ -1281,6 +1284,9 @@ class ActivitySubprocess(WatchedSubprocess):
                 cpu_seconds=getattr(msg, "cpu_seconds", None),
                 max_rss_mb=getattr(msg, "max_rss_mb", None),
                 execution_platform=getattr(msg, "execution_platform", None),
+                avg_cpu_cores=getattr(msg, "avg_cpu_cores", None),
+                read_bytes=getattr(msg, "read_bytes", None),
+                write_bytes=getattr(msg, "write_bytes", None),
             )
         elif isinstance(msg, GetConnection):
             conn = self.client.connections.get(msg.conn_id)

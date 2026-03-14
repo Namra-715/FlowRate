@@ -262,6 +262,9 @@ class TIRetryStatePayload(BaseModel):
     cpu_seconds: Annotated[float | None, Field(title="Cpu Seconds")] = None
     max_rss_mb: Annotated[float | None, Field(title="Max Rss Mb")] = None
     execution_platform: Annotated[str | None, Field(title="Execution Platform")] = None
+    avg_cpu_cores: Annotated[float | None, Field(title="Avg Cpu Cores")] = None
+    read_bytes: Annotated[int | None, Field(title="Read Bytes")] = None
+    write_bytes: Annotated[int | None, Field(title="Write Bytes")] = None
 
 
 class TISkippedDownstreamTasksStatePayload(BaseModel):
@@ -291,6 +294,9 @@ class TISuccessStatePayload(BaseModel):
     cpu_seconds: Annotated[float | None, Field(title="Cpu Seconds")] = None
     max_rss_mb: Annotated[float | None, Field(title="Max Rss Mb")] = None
     execution_platform: Annotated[str | None, Field(title="Execution Platform")] = None
+    avg_cpu_cores: Annotated[float | None, Field(title="Avg Cpu Cores")] = None
+    read_bytes: Annotated[int | None, Field(title="Read Bytes")] = None
+    write_bytes: Annotated[int | None, Field(title="Write Bytes")] = None
 
 
 class TITargetStatePayload(BaseModel):
@@ -571,6 +577,9 @@ class TITerminalStatePayload(BaseModel):
     cpu_seconds: Annotated[float | None, Field(title="Cpu Seconds")] = None
     max_rss_mb: Annotated[float | None, Field(title="Max Rss Mb")] = None
     execution_platform: Annotated[str | None, Field(title="Execution Platform")] = None
+    avg_cpu_cores: Annotated[float | None, Field(title="Avg Cpu Cores")] = None
+    read_bytes: Annotated[int | None, Field(title="Read Bytes")] = None
+    write_bytes: Annotated[int | None, Field(title="Write Bytes")] = None
 
 
 class AssetEventDagRunReference(BaseModel):

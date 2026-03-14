@@ -83,6 +83,9 @@ class TaskInstanceResponse(BaseModel):
     cpu_seconds: float | None = None
     max_rss_mb: float | None = None
     execution_platform: str | None = None
+    avg_cpu_cores: float | None = None
+    read_bytes: int | None = None
+    write_bytes: int | None = None
 
 
 class TaskInstanceCollectionResponse(BaseModel):

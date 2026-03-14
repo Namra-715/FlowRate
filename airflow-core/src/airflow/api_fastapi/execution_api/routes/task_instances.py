@@ -465,7 +465,14 @@ def _create_ti_state_update_query_and_update_state(
         query = query.values(state=updated_state, next_method=None, next_kwargs=None)
 
         if ti is not None:
-            for attr in ("cpu_seconds", "max_rss_mb", "execution_platform"):
+            for attr in (
+                "cpu_seconds",
+                "max_rss_mb",
+                "execution_platform",
+                "avg_cpu_cores",
+                "read_bytes",
+                "write_bytes",
+            ):
                 if getattr(ti_patch_payload, attr, None) is not None:
                     setattr(ti, attr, getattr(ti_patch_payload, attr))
 

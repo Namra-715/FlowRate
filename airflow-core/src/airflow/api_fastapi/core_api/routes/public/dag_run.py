@@ -119,6 +119,8 @@ def get_dag_run(dag_id: str, dag_run_id: str, session: SessionDep) -> DAGRunResp
             func.coalesce(func.sum(TI.cpu_seconds), 0.0),
             func.coalesce(func.max(TI.max_rss_mb), 0.0),
             func.count(TI.id),
+            func.coalesce(func.sum(TI.read_bytes), 0),
+            func.coalesce(func.sum(TI.write_bytes), 0),
         ).where(
             TI.dag_id == dag_id,
             TI.run_id == dag_run_id,
@@ -128,10 +130,20 @@ def get_dag_run(dag_id: str, dag_run_id: str, session: SessionDep) -> DAGRunResp
     total_cpu_seconds = None
     max_rss_mb = None
     task_count_with_metrics = None
+    total_read_bytes = None
+    total_write_bytes = None
     if row and row[2] > 0:
         total_cpu_seconds = float(row[0])
         max_rss_mb = float(row[1])
         task_count_with_metrics = int(row[2])
+        total_read_bytes = int(row[3]) if row[3] else None
+        total_write_bytes = int(row[4]) if row[4] else None
+    run_duration_seconds = None
+    if dag_run.start_date and dag_run.end_date and dag_run.end_date > dag_run.start_date:
+        run_duration_seconds = (dag_run.end_date - dag_run.start_date).total_seconds()
+    avg_cpu_cores = None
+    if total_cpu_seconds is not None and run_duration_seconds and run_duration_seconds > 0:
+        avg_cpu_cores = round(total_cpu_seconds / run_duration_seconds, 4)
 
     resp = DAGRunResponse.model_validate(dag_run)
     return resp.model_copy(
@@ -139,6 +151,9 @@ def get_dag_run(dag_id: str, dag_run_id: str, session: SessionDep) -> DAGRunResp
             "total_cpu_seconds": total_cpu_seconds,
             "max_rss_mb": max_rss_mb,
             "task_count_with_metrics": task_count_with_metrics,
+            "avg_cpu_cores": avg_cpu_cores,
+            "total_read_bytes": total_read_bytes,
+            "total_write_bytes": total_write_bytes,
         }
     )
 

@@ -701,6 +701,9 @@ export type DAGRunResponse = {
     total_cpu_seconds?: number | null;
     max_rss_mb?: number | null;
     task_count_with_metrics?: number | null;
+    avg_cpu_cores?: number | null;
+    total_read_bytes?: number | null;
+    total_write_bytes?: number | null;
 };
 
 /**
@@ -1451,6 +1454,9 @@ export type TaskInstanceResponse = {
     cpu_seconds?: number | null;
     max_rss_mb?: number | null;
     execution_platform?: string | null;
+    avg_cpu_cores?: number | null;
+    read_bytes?: number | null;
+    write_bytes?: number | null;
 };
 
 /**

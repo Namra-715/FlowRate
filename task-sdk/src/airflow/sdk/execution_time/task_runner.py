@@ -1422,6 +1422,9 @@ def _handle_current_task_success(
         succeed_kwargs["cpu_seconds"] = resource_metrics.get("cpu_seconds")
         succeed_kwargs["max_rss_mb"] = resource_metrics.get("max_rss_mb")
         succeed_kwargs["execution_platform"] = resource_metrics.get("execution_platform")
+        succeed_kwargs["avg_cpu_cores"] = resource_metrics.get("avg_cpu_cores")
+        succeed_kwargs["read_bytes"] = resource_metrics.get("read_bytes")
+        succeed_kwargs["write_bytes"] = resource_metrics.get("write_bytes")
     msg = SucceedTask(**succeed_kwargs)
     return msg, TaskInstanceState.SUCCESS
 
@@ -1452,9 +1455,15 @@ def _handle_current_task_failed(
         retry_kwargs["cpu_seconds"] = resource_metrics.get("cpu_seconds")
         retry_kwargs["max_rss_mb"] = resource_metrics.get("max_rss_mb")
         retry_kwargs["execution_platform"] = resource_metrics.get("execution_platform")
+        retry_kwargs["avg_cpu_cores"] = resource_metrics.get("avg_cpu_cores")
+        retry_kwargs["read_bytes"] = resource_metrics.get("read_bytes")
+        retry_kwargs["write_bytes"] = resource_metrics.get("write_bytes")
         task_state_kwargs["cpu_seconds"] = resource_metrics.get("cpu_seconds")
         task_state_kwargs["max_rss_mb"] = resource_metrics.get("max_rss_mb")
         task_state_kwargs["execution_platform"] = resource_metrics.get("execution_platform")
+        task_state_kwargs["avg_cpu_cores"] = resource_metrics.get("avg_cpu_cores")
+        task_state_kwargs["read_bytes"] = resource_metrics.get("read_bytes")
+        task_state_kwargs["write_bytes"] = resource_metrics.get("write_bytes")
 
     if ti._ti_context_from_server and ti._ti_context_from_server.should_retry:
         return RetryTask(**retry_kwargs), TaskInstanceState.UP_FOR_RETRY
