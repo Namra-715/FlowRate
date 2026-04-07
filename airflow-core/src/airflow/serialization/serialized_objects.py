@@ -2232,6 +2232,7 @@ class LazyDeserializedDAG(pydantic.BaseModel):
         "jinja_environment_kwargs",
         "relative_fileloc",
         "disable_bundle_versioning",
+        "enable_cost_metrics",
         "fail_fast",
         "last_loaded",
     }

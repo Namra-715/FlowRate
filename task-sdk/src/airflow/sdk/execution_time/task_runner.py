@@ -1252,6 +1252,22 @@ def run(
                 ti.state = state = TaskInstanceState.FAILED
                 return state, msg, error
 
+            enable_cost_metrics = getattr(ti.task.dag, "enable_cost_metrics", False)
+            collector = None
+            if enable_cost_metrics:
+                try:
+                    from airflow.sdk.execution_time.resource_metrics import (
+                        EXECUTION_PLATFORM_LOCAL,
+                        LocalResourceCollector,
+                        aggregate_and_write_dag_run_metrics,
+                        write_task_metrics,
+                    )
+
+                    log.info("Starting resource metrics collector for this task")
+                    collector = LocalResourceCollector()
+                    collector.start()
+                except Exception as e:
+                    log.warning("Resource metrics collector failed to start, continuing without metrics", exc_info=True, error=str(e))
             try:
                 result = _execute_task(context=context, ti=ti, log=log)
             except Exception:
@@ -1273,6 +1289,27 @@ def run(
                 # Send update only if value changed (e.g., user set context variables during execution)
                 if ti.rendered_map_index and ti.rendered_map_index != previous_rendered_map_index:
                     SUPERVISOR_COMMS.send(msg=SetRenderedMapIndex(rendered_map_index=ti.rendered_map_index))
+            finally:
+                if collector is not None:
+                    try:
+                        payload = collector.stop()
+                        setattr(ti, "_resource_metrics", payload)
+                        try_number_val = getattr(ti, "try_number", None) or 0
+                        map_index_val = getattr(ti, "map_index", None)
+                        write_task_metrics(
+                            ti.dag_id,
+                            ti.run_id,
+                            ti.task_id,
+                            try_number_val,
+                            map_index_val if map_index_val is not None and map_index_val >= 0 else None,
+                            payload.get("execution_platform", EXECUTION_PLATFORM_LOCAL),
+                            payload,
+                        )
+                        aggregate_and_write_dag_run_metrics(ti.dag_id, ti.run_id)
+                    except Exception as e:
+                        log.warning("Resource metrics collection or write failed, task result unchanged", exc_info=True, error=str(e))
+                        if not hasattr(ti, "_resource_metrics") or getattr(ti, "_resource_metrics", None) is None:
+                            setattr(ti, "_resource_metrics", {})
 
         _push_xcom_if_needed(result, ti, log)
 
@@ -1374,12 +1411,21 @@ def _handle_current_task_success(
 
     task_outlets = list(_build_asset_profiles(ti.task.outlets))
     outlet_events = list(_serialize_outlet_events(context["outlet_events"]))
-    msg = SucceedTask(
-        end_date=end_date,
-        task_outlets=task_outlets,
-        outlet_events=outlet_events,
-        rendered_map_index=ti.rendered_map_index,
-    )
+    resource_metrics = getattr(ti, "_resource_metrics", None)
+    succeed_kwargs: dict = {
+        "end_date": end_date,
+        "task_outlets": task_outlets,
+        "outlet_events": outlet_events,
+        "rendered_map_index": ti.rendered_map_index,
+    }
+    if resource_metrics is not None:
+        succeed_kwargs["cpu_seconds"] = resource_metrics.get("cpu_seconds")
+        succeed_kwargs["max_rss_mb"] = resource_metrics.get("max_rss_mb")
+        succeed_kwargs["execution_platform"] = resource_metrics.get("execution_platform")
+        succeed_kwargs["avg_cpu_cores"] = resource_metrics.get("avg_cpu_cores")
+        succeed_kwargs["read_bytes"] = resource_metrics.get("read_bytes")
+        succeed_kwargs["write_bytes"] = resource_metrics.get("write_bytes")
+    msg = SucceedTask(**succeed_kwargs)
     return msg, TaskInstanceState.SUCCESS
 
 
@@ -1398,12 +1444,31 @@ def _handle_current_task_failed(
     Stats.incr("operator_failures", tags={**stats_tags, "operator": operator})
     Stats.incr("ti_failures", tags=stats_tags)
 
+    resource_metrics = getattr(ti, "_resource_metrics", None)
+    retry_kwargs: dict = {"end_date": end_date}
+    task_state_kwargs: dict = {
+        "state": TaskInstanceState.FAILED,
+        "end_date": end_date,
+        "rendered_map_index": ti.rendered_map_index,
+    }
+    if resource_metrics is not None:
+        retry_kwargs["cpu_seconds"] = resource_metrics.get("cpu_seconds")
+        retry_kwargs["max_rss_mb"] = resource_metrics.get("max_rss_mb")
+        retry_kwargs["execution_platform"] = resource_metrics.get("execution_platform")
+        retry_kwargs["avg_cpu_cores"] = resource_metrics.get("avg_cpu_cores")
+        retry_kwargs["read_bytes"] = resource_metrics.get("read_bytes")
+        retry_kwargs["write_bytes"] = resource_metrics.get("write_bytes")
+        task_state_kwargs["cpu_seconds"] = resource_metrics.get("cpu_seconds")
+        task_state_kwargs["max_rss_mb"] = resource_metrics.get("max_rss_mb")
+        task_state_kwargs["execution_platform"] = resource_metrics.get("execution_platform")
+        task_state_kwargs["avg_cpu_cores"] = resource_metrics.get("avg_cpu_cores")
+        task_state_kwargs["read_bytes"] = resource_metrics.get("read_bytes")
+        task_state_kwargs["write_bytes"] = resource_metrics.get("write_bytes")
+
     if ti._ti_context_from_server and ti._ti_context_from_server.should_retry:
-        return RetryTask(end_date=end_date), TaskInstanceState.UP_FOR_RETRY
+        return RetryTask(**retry_kwargs), TaskInstanceState.UP_FOR_RETRY
     return (
-        TaskState(
-            state=TaskInstanceState.FAILED, end_date=end_date, rendered_map_index=ti.rendered_map_index
-        ),
+        TaskState(**task_state_kwargs),
         TaskInstanceState.FAILED,
     )
 

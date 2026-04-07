@@ -85,6 +85,30 @@ class DAGRunResponse(BaseModel):
     bundle_version: str | None
     dag_display_name: str = Field(validation_alias=AliasPath("dag_model", "dag_display_name"))
     partition_key: str | None
+    total_cpu_seconds: float | None = Field(
+        default=None,
+        description="Sum of task cpu_seconds for this run (for cost estimation).",
+    )
+    max_rss_mb: float | None = Field(
+        default=None,
+        description="Peak RAM (max of task max_rss_mb) for this run (for cost estimation).",
+    )
+    task_count_with_metrics: int | None = Field(
+        default=None,
+        description="Number of tasks in this run that reported resource metrics.",
+    )
+    avg_cpu_cores: float | None = Field(
+        default=None,
+        description="Average CPU cores used (total_cpu_seconds / run duration) for this run.",
+    )
+    total_read_bytes: int | None = Field(
+        default=None,
+        description="Sum of task read_bytes for this run (I/O).",
+    )
+    total_write_bytes: int | None = Field(
+        default=None,
+        description="Sum of task write_bytes for this run (I/O).",
+    )
 
 
 class DAGRunCollectionResponse(BaseModel):

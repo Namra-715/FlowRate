@@ -33,6 +33,7 @@ import attrs
 import dill
 import uuid6
 from sqlalchemy import (
+    BigInteger,
     JSON,
     Float,
     ForeignKey,
@@ -520,6 +521,12 @@ class TaskInstance(Base, LoggingMixin, BaseWorkload):
     start_date: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     end_date: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cpu_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_rss_mb: Mapped[float | None] = mapped_column(Float, nullable=True)
+    execution_platform: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    avg_cpu_cores: Mapped[float | None] = mapped_column(Float, nullable=True)
+    read_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    write_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     state: Mapped[str | None] = mapped_column(String(20), nullable=True)
     try_number: Mapped[int] = mapped_column(Integer, default=0)
     max_tries: Mapped[int] = mapped_column(Integer, server_default="-1")

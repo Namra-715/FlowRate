@@ -34,7 +34,7 @@ import Time from "src/components/Time";
 import { SearchParamsKeys } from "src/constants/searchParams";
 import DeleteRunButton from "src/pages/DeleteRunButton";
 import { usePatchDagRun } from "src/queries/usePatchDagRun";
-import { getDuration } from "src/utils";
+import { formatBytes, getDuration } from "src/utils";
 
 export const Header = ({ dagRun }: { readonly dagRun: DAGRunResponse }) => {
   const { t: translate } = useTranslation();
@@ -112,6 +112,31 @@ export const Header = ({ dagRun }: { readonly dagRun: DAGRunResponse }) => {
           { label: translate("startDate"), value: <Time datetime={dagRun.start_date} /> },
           { label: translate("endDate"), value: <Time datetime={dagRun.end_date} /> },
           { label: translate("duration"), value: getDuration(dagRun.start_date, dagRun.end_date) },
+          ...(dagRun.total_cpu_seconds != null
+            ? [{ label: translate("dagRun.totalCpuSeconds"), value: dagRun.total_cpu_seconds.toFixed(2) }]
+            : []),
+          ...(dagRun.max_rss_mb != null
+            ? [{ label: translate("dagRun.maxRssMb"), value: dagRun.max_rss_mb.toFixed(2) }]
+            : []),
+          ...(dagRun.avg_cpu_cores != null
+            ? [{ label: translate("dagRun.avgCpuCores"), value: dagRun.avg_cpu_cores.toFixed(2) }]
+            : []),
+          ...(dagRun.total_read_bytes != null && dagRun.total_read_bytes > 0
+            ? [
+                {
+                  label: translate("dagRun.totalReadBytes"),
+                  value: formatBytes(dagRun.total_read_bytes),
+                },
+              ]
+            : []),
+          ...(dagRun.total_write_bytes != null && dagRun.total_write_bytes > 0
+            ? [
+                {
+                  label: translate("dagRun.totalWriteBytes"),
+                  value: formatBytes(dagRun.total_write_bytes),
+                },
+              ]
+            : []),
           ...(dagRun.triggering_user_name === null
             ? []
             : [

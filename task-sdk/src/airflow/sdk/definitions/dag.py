@@ -411,6 +411,7 @@ class DAG:
     :param fail_fast: Fails currently running tasks when task in Dag fails.
         **Warning**: A fail stop dag can only have tasks with the default trigger rule ("all_success").
         An exception will be thrown if any task in a fail stop dag has a non default trigger rule.
+    :param enable_cost_metrics: Enable per-task and per-DagRun resource metrics tracking for this DAG.
     :param allowed_run_types: An optional list or single DagRunType specifying which run types are
         permitted for this dag. When set, the scheduler and API will only allow runs of the specified types.
     :param dag_display_name: The display name of the Dag which appears on the UI.
@@ -520,6 +521,7 @@ class DAG:
     owner_links: dict[str, str] = attrs.field(factory=dict)
     auto_register: bool = attrs.field(default=True, converter=bool)
     fail_fast: bool = attrs.field(default=False, converter=bool)
+    enable_cost_metrics: bool = attrs.field(default=False, converter=bool)
     allowed_run_types: DagRunType | Collection[DagRunType] | None = attrs.field(
         default=None, converter=_convert_allowed_run_types
     )
@@ -1565,6 +1567,7 @@ if TYPE_CHECKING:
         owner_links: dict[str, str] | None = None,
         auto_register: bool = True,
         fail_fast: bool = False,
+        enable_cost_metrics: bool = False,
         allowed_run_types: DagRunType | Collection[DagRunType] | None = None,
         dag_display_name: str | None = None,
         disable_bundle_versioning: bool = False,

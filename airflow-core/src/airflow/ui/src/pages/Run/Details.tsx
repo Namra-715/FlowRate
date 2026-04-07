@@ -27,7 +27,7 @@ import { RunTypeIcon } from "src/components/RunTypeIcon";
 import { StateBadge } from "src/components/StateBadge";
 import Time from "src/components/Time";
 import { ClipboardRoot, ClipboardIconButton } from "src/components/ui";
-import { getDuration, isStatePending, useAutoRefresh } from "src/utils";
+import { formatBytes, getDuration, isStatePending, useAutoRefresh } from "src/utils";
 
 export const Details = () => {
   const { t: translate } = useTranslation(["common", "components"]);
@@ -84,6 +84,36 @@ export const Details = () => {
           <Table.Cell>{translate("duration")}</Table.Cell>
           <Table.Cell>{getDuration(dagRun.start_date, dagRun.end_date)}</Table.Cell>
         </Table.Row>
+        {dagRun.total_cpu_seconds != null && (
+          <Table.Row>
+            <Table.Cell>{translate("dagRun.totalCpuSeconds")}</Table.Cell>
+            <Table.Cell>{dagRun.total_cpu_seconds.toFixed(2)}</Table.Cell>
+          </Table.Row>
+        )}
+        {dagRun.max_rss_mb != null && (
+          <Table.Row>
+            <Table.Cell>{translate("dagRun.maxRssMb")}</Table.Cell>
+            <Table.Cell>{dagRun.max_rss_mb.toFixed(2)}</Table.Cell>
+          </Table.Row>
+        )}
+        {dagRun.avg_cpu_cores != null && (
+          <Table.Row>
+            <Table.Cell>{translate("dagRun.avgCpuCores")}</Table.Cell>
+            <Table.Cell>{dagRun.avg_cpu_cores.toFixed(2)}</Table.Cell>
+          </Table.Row>
+        )}
+        {dagRun.total_read_bytes != null && dagRun.total_read_bytes > 0 && (
+          <Table.Row>
+            <Table.Cell>{translate("dagRun.totalReadBytes")}</Table.Cell>
+            <Table.Cell>{formatBytes(dagRun.total_read_bytes)}</Table.Cell>
+          </Table.Row>
+        )}
+        {dagRun.total_write_bytes != null && dagRun.total_write_bytes > 0 && (
+          <Table.Row>
+            <Table.Cell>{translate("dagRun.totalWriteBytes")}</Table.Cell>
+            <Table.Cell>{formatBytes(dagRun.total_write_bytes)}</Table.Cell>
+          </Table.Row>
+        )}
         <Table.Row>
           <Table.Cell>{translate("dagRun.lastSchedulingDecision")}</Table.Cell>
           <Table.Cell>
