@@ -63,6 +63,6 @@ def upgrade():
 
 def downgrade():
     """Drop flowrate_metric table."""
-    op.drop_index("ix_flowrate_metric_dag_run_task", table_name="flowrate_metric")
+    op.drop_index("ix_flowrate_metric_dag_run_task", table_name="flowrate_metric", if_exists=True)
     op.drop_table("flowrate_metric")
 
