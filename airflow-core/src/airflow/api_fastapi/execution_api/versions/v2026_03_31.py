@@ -25,7 +25,10 @@ from airflow.api_fastapi.common.types import UtcDateTime
 from airflow.api_fastapi.execution_api.datamodels.taskinstance import (
     DagRun,
     TIDeferredStatePayload,
+    TIRetryStatePayload,
     TIRunContext,
+    TISuccessStatePayload,
+    TITerminalStatePayload,
 )
 
 
@@ -95,3 +98,21 @@ class MakeDagRunStartDateNullable(VersionChange):
         """Ensure start_date is never None in direct DagRun responses for previous API versions."""
         if response.body.get("start_date") is None:
             response.body["start_date"] = response.body.get("run_after")
+
+
+class AddResourceMetricsFields(VersionChange):
+    """Add optional resource metrics fields (cpu_seconds, max_rss_mb, execution_platform) to state payloads."""
+
+    description = __doc__
+
+    instructions_to_migrate_to_previous_version = (
+        schema(TITerminalStatePayload).field("cpu_seconds").didnt_exist,
+        schema(TITerminalStatePayload).field("max_rss_mb").didnt_exist,
+        schema(TITerminalStatePayload).field("execution_platform").didnt_exist,
+        schema(TISuccessStatePayload).field("cpu_seconds").didnt_exist,
+        schema(TISuccessStatePayload).field("max_rss_mb").didnt_exist,
+        schema(TISuccessStatePayload).field("execution_platform").didnt_exist,
+        schema(TIRetryStatePayload).field("cpu_seconds").didnt_exist,
+        schema(TIRetryStatePayload).field("max_rss_mb").didnt_exist,
+        schema(TIRetryStatePayload).field("execution_platform").didnt_exist,
+    )

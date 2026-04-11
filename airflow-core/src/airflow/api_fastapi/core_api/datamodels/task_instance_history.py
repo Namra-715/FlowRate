@@ -62,6 +62,9 @@ class TaskInstanceHistoryResponse(BaseModel):
     executor: str | None
     executor_config: Annotated[str, BeforeValidator(str)]
     dag_version: DagVersionResponse | None
+    cpu_seconds: float | None = None
+    max_rss_mb: float | None = None
+    execution_platform: str | None = None
 
 
 class TaskInstanceHistoryCollectionResponse(BaseModel):

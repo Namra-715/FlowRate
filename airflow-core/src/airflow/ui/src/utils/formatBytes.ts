@@ -4,7 +4,7 @@
  * distributed with this work for additional information
  * regarding copyright ownership.  The ASF licenses this file
  * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
+ * "License"); you may not use it except in compliance
  * with the License.  You may obtain a copy of the License at
  *
  *   http://www.apache.org/licenses/LICENSE-2.0
@@ -17,11 +17,16 @@
  * under the License.
  */
 
-export { capitalize } from "./capitalize";
-export { getDuration, renderDuration } from "./datetimeUtils";
-export { formatBytes } from "./formatBytes";
-export { getMetaKey } from "./getMetaKey";
-export { useContainerWidth } from "./useContainerWidth";
-export { useFiltersHandler, type FilterableSearchParamsKeys } from "./useFiltersHandler";
-export * from "./query";
-export { STATE_PRIORITY, sortStateEntries } from "./stateUtils";
+/** Format byte count as human-readable string (e.g. "1.5 MB"). */
+export function formatBytes(n: number | null | undefined): string {
+  if (n == null || n < 0) return "—";
+  if (n === 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let i = 0;
+  let v = n;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(i === 0 ? 0 : 2)} ${units[i]}`;
+}

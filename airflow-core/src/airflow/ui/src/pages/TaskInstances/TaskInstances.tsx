@@ -36,7 +36,7 @@ import { StateBadge } from "src/components/StateBadge";
 import Time from "src/components/Time";
 import { TruncatedText } from "src/components/TruncatedText";
 import { SearchParamsKeys, type SearchParamsKeysType } from "src/constants/searchParams";
-import { useAutoRefresh, isStatePending, renderDuration } from "src/utils";
+import { formatBytes, useAutoRefresh, isStatePending, renderDuration } from "src/utils";
 import { getTaskInstanceLink } from "src/utils/links";
 
 import DeleteTaskInstanceButton from "./DeleteTaskInstanceButton";
@@ -195,6 +195,40 @@ const taskInstanceColumns = ({
     accessorKey: "duration",
     cell: ({ row: { original } }) => renderDuration(original.duration),
     header: translate("duration"),
+  },
+  {
+    accessorKey: "cpu_seconds",
+    cell: ({ row: { original } }) =>
+      original.cpu_seconds != null ? original.cpu_seconds.toFixed(2) : "—",
+    header: translate("taskInstance.cpuSeconds"),
+  },
+  {
+    accessorKey: "max_rss_mb",
+    cell: ({ row: { original } }) =>
+      original.max_rss_mb != null ? original.max_rss_mb.toFixed(2) : "—",
+    header: translate("taskInstance.maxRssMb"),
+  },
+  {
+    accessorKey: "avg_cpu_cores",
+    cell: ({ row: { original } }) =>
+      original.avg_cpu_cores != null ? original.avg_cpu_cores.toFixed(2) : "—",
+    header: translate("taskInstance.avgCpuCores"),
+  },
+  {
+    accessorKey: "read_bytes",
+    cell: ({ row: { original } }) =>
+      original.read_bytes != null && original.read_bytes > 0
+        ? formatBytes(original.read_bytes)
+        : "—",
+    header: translate("taskInstance.readBytes"),
+  },
+  {
+    accessorKey: "write_bytes",
+    cell: ({ row: { original } }) =>
+      original.write_bytes != null && original.write_bytes > 0
+        ? formatBytes(original.write_bytes)
+        : "—",
+    header: translate("taskInstance.writeBytes"),
   },
   {
     accessorKey: "dag_version",

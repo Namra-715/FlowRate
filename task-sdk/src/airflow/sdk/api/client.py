@@ -228,18 +228,59 @@ class TaskInstanceOperations:
         )
         self.client.patch(f"task-instances/{id}/state", content=body.model_dump_json())
 
-    def retry(self, id: uuid.UUID, end_date: datetime, rendered_map_index):
+    def retry(
+        self,
+        id: uuid.UUID,
+        end_date: datetime,
+        rendered_map_index,
+        *,
+        cpu_seconds: float | None = None,
+        max_rss_mb: float | None = None,
+        execution_platform: str | None = None,
+        avg_cpu_cores: float | None = None,
+        read_bytes: int | None = None,
+        write_bytes: int | None = None,
+    ):
         """Tell the API server that this TI has failed and reached a up_for_retry state."""
-        body = TIRetryStatePayload(end_date=end_date, rendered_map_index=rendered_map_index)
+        body = TIRetryStatePayload(
+            end_date=end_date,
+            rendered_map_index=rendered_map_index,
+            cpu_seconds=cpu_seconds,
+            max_rss_mb=max_rss_mb,
+            execution_platform=execution_platform,
+            avg_cpu_cores=avg_cpu_cores,
+            read_bytes=read_bytes,
+            write_bytes=write_bytes,
+        )
         self.client.patch(f"task-instances/{id}/state", content=body.model_dump_json())
 
-    def succeed(self, id: uuid.UUID, when: datetime, task_outlets, outlet_events, rendered_map_index):
+    def succeed(
+        self,
+        id: uuid.UUID,
+        when: datetime,
+        task_outlets,
+        outlet_events,
+        rendered_map_index,
+        *,
+        cpu_seconds: float | None = None,
+        max_rss_mb: float | None = None,
+        execution_platform: str | None = None,
+        avg_cpu_cores: float | None = None,
+        read_bytes: int | None = None,
+        write_bytes: int | None = None,
+    ):
         """Tell the API server that this TI has succeeded."""
         body = TISuccessStatePayload(
             end_date=when,
             task_outlets=task_outlets,
             outlet_events=outlet_events,
             rendered_map_index=rendered_map_index,
+            cpu_seconds=cpu_seconds,
+            max_rss_mb=max_rss_mb,
+            execution_platform=execution_platform,
+            avg_cpu_cores=avg_cpu_cores,
+            read_bytes=read_bytes,
+            write_bytes=write_bytes,
         )
         self.client.patch(f"task-instances/{id}/state", content=body.model_dump_json())
 
