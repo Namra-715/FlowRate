@@ -27,6 +27,7 @@ from sqlalchemy.orm import Session as SASession
 from airflow.configuration import conf
 from airflow.models.base import metadata
 from airflow.models.flowrate_metric import FlowRateMetric
+from airflow.plugins.flowrate.cost_engine import FlowRatePricing, estimate_cost_auto, estimate_cost_from_usage_metrics
 from airflow.plugins.flowrate.persistence import save_task_metric
 
 
@@ -134,3 +135,46 @@ def test_graceful_failure_when_db_unavailable(in_memory_session: SASession, capl
     # No rows should be created and no exception should propagate.
     assert _count_metrics(in_memory_session) == 0
     assert any("Failed to persist FlowRate metric" in message for message in caplog.messages)
+
+
+def test_estimate_cost_from_usage_metrics_matches_core_hours():
+    pricing = FlowRatePricing(cpu_price_per_core_hour=2.0, memory_price_per_gib_hour=0.0)
+    assert (
+        estimate_cost_from_usage_metrics(
+            cpu_seconds=7200.0,
+            max_rss_mb=None,
+            duration_seconds=3600.0,
+            pricing=pricing,
+        )
+        == 4.0
+    )
+
+
+def test_estimate_cost_auto_prefers_measured_cpu_over_k8s_request():
+    pricing = FlowRatePricing(cpu_price_per_core_hour=10.0, memory_price_per_gib_hour=1.0)
+    assert (
+        estimate_cost_auto(
+            cpu_seconds=3600.0,
+            max_rss_mb=None,
+            cpu_request_cores=4.0,
+            memory_request_gib=None,
+            duration_seconds=3600.0,
+            pricing=pricing,
+        )
+        == 10.0
+    )
+
+
+def test_estimate_cost_auto_falls_back_to_k8s_when_no_measured_metrics():
+    pricing = FlowRatePricing(cpu_price_per_core_hour=1.0, memory_price_per_gib_hour=2.0)
+    assert (
+        estimate_cost_auto(
+            cpu_seconds=None,
+            max_rss_mb=None,
+            cpu_request_cores=1.0,
+            memory_request_gib=1.0,
+            duration_seconds=3600.0,
+            pricing=pricing,
+        )
+        == 3.0
+    )

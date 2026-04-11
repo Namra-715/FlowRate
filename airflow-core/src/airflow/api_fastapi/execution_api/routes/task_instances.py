@@ -69,6 +69,7 @@ from airflow.models.taskinstance import TaskInstance as TI, _stop_remaining_task
 from airflow.models.taskreschedule import TaskReschedule
 from airflow.models.trigger import Trigger
 from airflow.models.xcom import XComModel
+from airflow.plugins.flowrate.cost_engine import persist_estimated_ti_cost
 from airflow.serialization.definitions.assets import SerializedAsset, SerializedAssetUniqueKey
 from airflow.utils.sqlalchemy import get_dialect_name
 from airflow.utils.state import DagRunState, TaskInstanceState, TerminalTIState
@@ -475,6 +476,7 @@ def _create_ti_state_update_query_and_update_state(
             ):
                 if getattr(ti_patch_payload, attr, None) is not None:
                     setattr(ti, attr, getattr(ti_patch_payload, attr))
+            persist_estimated_ti_cost(ti, end_date=ti_patch_payload.end_date)
 
         if updated_state == TaskInstanceState.FAILED:
             # This is the only case needs extra handling for TITerminalStatePayload
@@ -948,12 +950,12 @@ def get_task_instance_states(
     if run_ids:
         query = query.where(TI.run_id.in_(run_ids))
 
-    results = session.scalars(query).all()
+    results = list(session.scalars(query).all())
 
     if task_group_id:
         group_tasks = _get_group_tasks(dag_id, task_group_id, session, dag_bag, logical_dates, run_ids)
 
-        results = results + group_tasks if task_ids else group_tasks
+        results = results + list(group_tasks) if task_ids else list(group_tasks)
 
     if map_index is not None:
         results = [task for task in results if task.map_index == map_index]
