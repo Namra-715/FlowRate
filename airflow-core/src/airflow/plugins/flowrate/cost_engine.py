@@ -61,11 +61,20 @@ def get_pricing() -> FlowRatePricing:
 
 
 def _cost_basis() -> str:
-    # Normalize configured cost basis, defaults to auto if invalid
-    raw = conf.get("flowrate", "cost_basis", fallback="auto").lower().strip()
+    # Normalize configured cost basis, defaults to usage if invalid
+    raw = conf.get("flowrate", "cost_basis", fallback="usage").lower().strip()
     if raw in ("auto", "requests", "usage"):
         return raw
-    return "auto"
+    return "usage"
+
+
+def _kubernetes_requests_enabled() -> bool:
+    """When False (default), FlowRate targets local executor: no Kubernetes API calls."""
+    try:
+        return conf.getboolean("flowrate", "kubernetes_requests_enabled", fallback=False)
+    except Exception:
+        log.debug("Invalid flowrate.kubernetes_requests_enabled; treating as False.", exc_info=True)
+        return False
 
 
 def estimate_cost(
@@ -242,19 +251,28 @@ def persist_estimated_ti_cost(ti: TaskInstance, *, end_date: datetime | None = N
     if not effective_end:
         return
     duration_seconds = max((effective_end - ti.start_date).total_seconds(), 0.0)
-    cpu_request, memory_request = _fetch_kubernetes_requests(pod_name=ti.hostname or "")
+    if _kubernetes_requests_enabled():
+        cpu_request, memory_request = _fetch_kubernetes_requests(pod_name=ti.hostname or "")
+    else:
+        cpu_request, memory_request = None, None
     pricing = get_pricing()
     basis = _cost_basis()
     cpu_seconds = getattr(ti, "cpu_seconds", None)
     max_rss_mb = getattr(ti, "max_rss_mb", None)
 
     if basis == "requests":
-        estimated_cost = estimate_cost(
-            cpu_request_cores=cpu_request,
-            memory_request_gib=memory_request,
-            duration_seconds=duration_seconds,
-            pricing=pricing,
-        )
+        if not _kubernetes_requests_enabled():
+            log.debug(
+                "FlowRate cost_basis=requests requires flowrate.kubernetes_requests_enabled=True; skipping cost."
+            )
+            estimated_cost = None
+        else:
+            estimated_cost = estimate_cost(
+                cpu_request_cores=cpu_request,
+                memory_request_gib=memory_request,
+                duration_seconds=duration_seconds,
+                pricing=pricing,
+            )
     elif basis == "usage":
         estimated_cost = estimate_cost_from_usage_metrics(
             cpu_seconds=cpu_seconds,
@@ -271,6 +289,11 @@ def persist_estimated_ti_cost(ti: TaskInstance, *, end_date: datetime | None = N
             duration_seconds=duration_seconds,
             pricing=pricing,
         )
+
+    # Local executor: avoid a DB row per task when there is no measurable cost
+    # (e.g. ``enable_cost_metrics`` false and Kubernetes requests disabled).
+    if estimated_cost is None:
+        return
 
     save_task_metric(
         dag_id=ti.dag_id,
