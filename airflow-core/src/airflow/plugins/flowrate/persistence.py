@@ -20,7 +20,9 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+
+from sqlalchemy import func, select
 
 from airflow.configuration import conf
 from airflow.models.flowrate_metric import FlowRateMetric
@@ -81,4 +83,150 @@ def save_task_metric(
             run_id,
             task_id,
         )
+
+
+@provide_session
+def get_task_costs(
+    dag_id: str,
+    run_id: str,
+    *,
+    session: Session = NEW_SESSION,
+) -> list[FlowRateMetric]:
+    """Return all FlowRateMetric rows for a specific DAG run (per-task breakdown)."""
+    if not _is_flowrate_enabled():
+        return []
+    return list(
+        session.scalars(
+            select(FlowRateMetric)
+            .where(FlowRateMetric.dag_id == dag_id, FlowRateMetric.run_id == run_id)
+            .order_by(FlowRateMetric.start_date)
+        ).all()
+    )
+
+
+@provide_session
+def get_dag_run_cost(
+    dag_id: str,
+    run_id: str,
+    *,
+    session: Session = NEW_SESSION,
+) -> float | None:
+    """Return the total estimated cost for a single DAG run."""
+    if not _is_flowrate_enabled():
+        return None
+    result = session.scalar(
+        select(func.sum(FlowRateMetric.estimated_cost)).where(
+            FlowRateMetric.dag_id == dag_id,
+            FlowRateMetric.run_id == run_id,
+            FlowRateMetric.estimated_cost.isnot(None),
+        )
+    )
+    return round(float(result), 8) if result is not None else None
+
+
+@provide_session
+def get_dag_costs_by_window(
+    dag_id: str,
+    start_time: datetime,
+    end_time: datetime,
+    *,
+    session: Session = NEW_SESSION,
+) -> dict[str, Any] | None:
+    """Return total cost and task count for a DAG within a time window."""
+    if not _is_flowrate_enabled():
+        return None
+    row = session.execute(
+        select(
+            func.coalesce(func.sum(FlowRateMetric.estimated_cost), 0.0),
+            func.count(FlowRateMetric.id),
+        ).where(
+            FlowRateMetric.dag_id == dag_id,
+            FlowRateMetric.estimated_cost.isnot(None),
+            FlowRateMetric.start_date >= start_time,
+            FlowRateMetric.start_date <= end_time,
+        )
+    ).one()
+    if row[1] == 0:
+        return None
+    return {
+        "dag_id": dag_id,
+        "total_cost": round(float(row[0]), 8),
+        "task_count": int(row[1]),
+        "window_start": start_time,
+        "window_end": end_time,
+    }
+
+
+@provide_session
+def get_top_expensive_dags(
+    start_time: datetime,
+    end_time: datetime,
+    limit: int = 10,
+    *,
+    session: Session = NEW_SESSION,
+) -> list[dict[str, Any]]:
+    """Return the top-N most expensive DAGs within a time window."""
+    if not _is_flowrate_enabled():
+        return []
+    rows = session.execute(
+        select(
+            FlowRateMetric.dag_id,
+            func.sum(FlowRateMetric.estimated_cost).label("total_cost"),
+            func.count(FlowRateMetric.id).label("task_count"),
+        )
+        .where(
+            FlowRateMetric.estimated_cost.isnot(None),
+            FlowRateMetric.start_date >= start_time,
+            FlowRateMetric.start_date <= end_time,
+        )
+        .group_by(FlowRateMetric.dag_id)
+        .order_by(func.sum(FlowRateMetric.estimated_cost).desc())
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "dag_id": row[0],
+            "total_cost": round(float(row[1]), 8),
+            "task_count": int(row[2]),
+        }
+        for row in rows
+    ]
+
+
+@provide_session
+def get_top_expensive_tasks(
+    start_time: datetime,
+    end_time: datetime,
+    limit: int = 10,
+    *,
+    session: Session = NEW_SESSION,
+) -> list[dict[str, Any]]:
+    """Return the top-N most expensive tasks (by dag_id + task_id) within a time window."""
+    if not _is_flowrate_enabled():
+        return []
+    rows = session.execute(
+        select(
+            FlowRateMetric.dag_id,
+            FlowRateMetric.task_id,
+            func.sum(FlowRateMetric.estimated_cost).label("total_cost"),
+            func.count(FlowRateMetric.id).label("run_count"),
+        )
+        .where(
+            FlowRateMetric.estimated_cost.isnot(None),
+            FlowRateMetric.start_date >= start_time,
+            FlowRateMetric.start_date <= end_time,
+        )
+        .group_by(FlowRateMetric.dag_id, FlowRateMetric.task_id)
+        .order_by(func.sum(FlowRateMetric.estimated_cost).desc())
+        .limit(limit)
+    ).all()
+    return [
+        {
+            "dag_id": row[0],
+            "task_id": row[1],
+            "total_cost": round(float(row[2]), 8),
+            "run_count": int(row[3]),
+        }
+        for row in rows
+    ]
 
