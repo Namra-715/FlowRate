@@ -55,6 +55,7 @@ from airflow.sdk.api.datamodels._generated import (
     TaskInstance,
     TaskInstanceState,
     TaskStatesResponse,
+    TerminalStateNonSuccess,
     VariableResponse,
     XComSequenceIndexResponse,
 )
@@ -532,7 +533,7 @@ class WatchedSubprocess:
         proc = cls(
             pid=pid,
             stdin=read_requests,
-            process=psutil.Process(pid),
+            _process=psutil.Process(pid),
             process_log=logger,
             start_time=time.monotonic(),
             **constructor_kwargs,
@@ -590,7 +591,7 @@ class WatchedSubprocess:
             length_prefixed_frame_reader(self.handle_requests(log), on_close=self._on_socket_closed),
         )
 
-    def _create_log_forwarder(self, loggers, name, log_level=logging.INFO) -> Callable[[socket], bool]:
+    def _create_log_forwarder(self, loggers, name, log_level=logging.INFO) -> tuple[Callable[[socket], bool], Callable[[socket], None]]:
         """Create a socket handler that forwards logs to a logger."""
         loggers = tuple(
             reconfigure_logger(
@@ -821,7 +822,11 @@ class WatchedSubprocess:
             return self._exit_code
 
         try:
-            self._exit_code = self._process.wait(timeout=0)
+            exit_code = self._process.wait(timeout=0)
+            if exit_code is not None:
+                self._exit_code = int(cast("int", exit_code))
+            else:
+                self._exit_code = None
         except psutil.TimeoutExpired:
             if raise_on_timeout:
                 raise
@@ -844,7 +849,7 @@ class WatchedSubprocess:
                     message += " Likely out of memory error (OOM)."
                     level = logging.CRITICAL
                 message += " For more information, see https://airflow.apache.org/docs/apache-airflow/stable/troubleshooting.html#process-terminated-by-signal."
-                self.process_log.log(level, message, signal=int(self._exit_code), signal_name=name)
+                self.process_log.log(level, message, signal=self._exit_code, signal_name=name)
             elif self._exit_code:
                 # Run of the mill exit code (1, 42, etc).
                 # Most task errors should be caught in the task runner and _that_ exits with 0.
@@ -982,6 +987,13 @@ class ActivitySubprocess(WatchedSubprocess):
 
     _task_end_time_monotonic: float | None = attrs.field(default=None, init=False)
     _rendered_map_index: str | None = attrs.field(default=None, init=False)
+    _terminal_end_date: datetime | None = attrs.field(default=None, init=False)
+    _terminal_cpu_seconds: float | None = attrs.field(default=None, init=False)
+    _terminal_max_rss_mb: float | None = attrs.field(default=None, init=False)
+    _terminal_execution_platform: str | None = attrs.field(default=None, init=False)
+    _terminal_avg_cpu_cores: float | None = attrs.field(default=None, init=False)
+    _terminal_read_bytes: int | None = attrs.field(default=None, init=False)
+    _terminal_write_bytes: int | None = attrs.field(default=None, init=False)
 
     decoder: ClassVar[TypeAdapter[ToSupervisor]] = TypeAdapter(ToSupervisor)
 
@@ -1027,7 +1039,7 @@ class ActivitySubprocess(WatchedSubprocess):
             # message. But before we do that, we need to tell the server it's started (so it has the chance to
             # tell us "no, stop!" for any reason)
             ti_context = self.client.task_instances.start(ti.id, self.pid, start_date)
-            self._should_retry = ti_context.should_retry
+            self._should_retry = bool(ti_context.should_retry)
             self._last_successful_heartbeat = time.monotonic()
         except Exception:
             # On any error kill that subprocess!
@@ -1078,12 +1090,34 @@ class ActivitySubprocess(WatchedSubprocess):
         # update the state of the TaskInstance to reflect the final state of the process.
         # For states like `deferred`, `up_for_reschedule`, the process will exit with 0, but the state will be updated
         # by the subprocess in the `handle_requests` method.
-        if self.final_state not in STATES_SENT_DIRECTLY:
+        final_state = self.final_state
+        if final_state not in STATES_SENT_DIRECTLY:
+            if final_state == TaskInstanceState.UP_FOR_RETRY:
+                self.client.task_instances.retry(
+                    id=self.id,
+                    end_date=self._terminal_end_date or datetime.now(tz=timezone.utc),
+                    rendered_map_index=self._rendered_map_index,
+                    cpu_seconds=self._terminal_cpu_seconds,
+                    max_rss_mb=self._terminal_max_rss_mb,
+                    execution_platform=self._terminal_execution_platform,
+                    avg_cpu_cores=self._terminal_avg_cpu_cores,
+                    read_bytes=self._terminal_read_bytes,
+                    write_bytes=self._terminal_write_bytes,
+                )
+                return
+            if final_state == SERVER_TERMINATED:
+                return
             self.client.task_instances.finish(
                 id=self.id,
-                state=self.final_state,
-                when=datetime.now(tz=timezone.utc),
+                state=cast("TerminalStateNonSuccess", final_state),
+                when=self._terminal_end_date or datetime.now(tz=timezone.utc),
                 rendered_map_index=self._rendered_map_index,
+                cpu_seconds=self._terminal_cpu_seconds,
+                max_rss_mb=self._terminal_max_rss_mb,
+                execution_platform=self._terminal_execution_platform,
+                avg_cpu_cores=self._terminal_avg_cpu_cores,
+                read_bytes=self._terminal_read_bytes,
+                write_bytes=self._terminal_write_bytes,
             )
 
     def _upload_logs(self):
@@ -1096,6 +1130,7 @@ class ActivitySubprocess(WatchedSubprocess):
         from airflow.sdk.log import upload_to_remote
 
         with _remote_logging_conn(self.client):
+            assert self.ti is not None
             upload_to_remote(self.process_log, self.ti)
 
     def _monitor_subprocess(self):
@@ -1256,10 +1291,18 @@ class ActivitySubprocess(WatchedSubprocess):
             self._terminal_state = msg.state
             self._task_end_time_monotonic = time.monotonic()
             self._rendered_map_index = msg.rendered_map_index
+            self._terminal_end_date = msg.end_date
+            self._terminal_cpu_seconds = getattr(msg, "cpu_seconds", None)
+            self._terminal_max_rss_mb = getattr(msg, "max_rss_mb", None)
+            self._terminal_execution_platform = getattr(msg, "execution_platform", None)
+            self._terminal_avg_cpu_cores = getattr(msg, "avg_cpu_cores", None)
+            self._terminal_read_bytes = getattr(msg, "read_bytes", None)
+            self._terminal_write_bytes = getattr(msg, "write_bytes", None)
         elif isinstance(msg, SucceedTask):
             self._terminal_state = msg.state
             self._task_end_time_monotonic = time.monotonic()
             self._rendered_map_index = msg.rendered_map_index
+            self._terminal_end_date = msg.end_date
             self.client.task_instances.succeed(
                 id=self.id,
                 when=msg.end_date,
@@ -1277,6 +1320,7 @@ class ActivitySubprocess(WatchedSubprocess):
             self._terminal_state = msg.state
             self._task_end_time_monotonic = time.monotonic()
             self._rendered_map_index = msg.rendered_map_index
+            self._terminal_end_date = msg.end_date
             self.client.task_instances.retry(
                 id=self.id,
                 end_date=msg.end_date,
@@ -1405,7 +1449,7 @@ class ActivitySubprocess(WatchedSubprocess):
             dump_opts = {"exclude_unset": True}
         elif isinstance(msg, TriggerDagRun):
             resp = self.client.dag_runs.trigger(
-                msg.dag_id, msg.run_id, msg.conf, msg.logical_date, msg.reset_dag_run, msg.note
+                msg.dag_id, msg.run_id, msg.conf, msg.logical_date, bool(msg.reset_dag_run), msg.note
             )
         elif isinstance(msg, GetDagRun):
             dr_resp = self.client.dag_runs.get_detail(msg.dag_id, msg.run_id)
@@ -1482,7 +1526,7 @@ class ActivitySubprocess(WatchedSubprocess):
                 body=msg.body,
                 defaults=msg.defaults,
                 params=msg.params,
-                multiple=msg.multiple,
+                multiple=bool(msg.multiple),
                 assigned_users=msg.assigned_users,
             )
             resp = HITLDetailRequestResult.from_api_response(hitl_detail_request)
@@ -1642,7 +1686,7 @@ class InProcessTestSupervisor(ActivitySubprocess):
         supervisor = cls(
             id=what.id,
             pid=os.getpid(),  # Use current process
-            process=psutil.Process(),  # Current process
+            _process=psutil.Process(),  # Current process
             process_log=logger or structlog.get_logger(logger_name="task").bind(),
             client=cls._api_client(task.dag),
             **kwargs,
@@ -1685,7 +1729,7 @@ class InProcessTestSupervisor(ActivitySubprocess):
                 # the task has finished—unless the terminal state was already sent explicitly.
                 supervisor.update_task_state_if_needed()
 
-        return TaskRunResult(ti=ti, state=state, msg=msg, error=error)
+        return TaskRunResult(ti=cast("RuntimeTI", ti), state=state, msg=msg, error=error)
 
     @staticmethod
     def _api_client(dag=None):
@@ -1725,7 +1769,7 @@ class InProcessTestSupervisor(ActivitySubprocess):
         supervisor = cls(
             id=ti.id,
             pid=os.getpid(),  # Use current process
-            process=psutil.Process(),  # Current process - note the underscore prefix
+            _process=psutil.Process(),  # Current process - note the underscore prefix
             process_log=structlog.get_logger(logger_name="task").bind(),
             client=cls._api_client(),
         )
@@ -1747,7 +1791,8 @@ class InProcessTestSupervisor(ActivitySubprocess):
         """Override to use in-process comms."""
         # Since we're running in-process, we don't have a final state until the task has finished.
         # We also don't have a process exit code to determine success/failure.
-        return self._terminal_state
+        # Return the terminal state if set, otherwise return SUCCESS as default for in-process execution.
+        return self._terminal_state or TaskInstanceState.SUCCESS
 
 
 @contextmanager

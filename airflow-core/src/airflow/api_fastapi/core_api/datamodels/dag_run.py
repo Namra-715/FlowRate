@@ -109,6 +109,10 @@ class DAGRunResponse(BaseModel):
         default=None,
         description="Sum of task write_bytes for this run (I/O).",
     )
+    total_estimated_cost: float | None = Field(
+        default=None,
+        description="Sum of FlowRate estimated task costs for this run.",
+    )
 
 
 class DAGRunCollectionResponse(BaseModel):

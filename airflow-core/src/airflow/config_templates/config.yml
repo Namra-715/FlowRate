@@ -2942,10 +2942,10 @@ profiling:
 
 flowrate:
   description: |
-    Configuration for FlowRate cost estimation. Uses task wall-clock duration,
-    optional Kubernetes pod resource **requests**, and optional measured
-    metrics (``cpu_seconds``, ``max_rss_mb`` on the task instance when the DAG
-    has ``enable_cost_metrics=True``).
+    Configuration for FlowRate cost estimation and persistence on local
+    executor workloads. Primary input is measured ``cpu_seconds`` and
+    ``max_rss_mb`` from FlowRate-enabled DAGs
+    (``enable_cost_metrics=True``).
   options:
     enabled:
       description: |
@@ -2955,39 +2955,20 @@ flowrate:
       type: boolean
       example: ~
       default: "False"
-    cost_basis:
-      description: |
-        How to price CPU and memory: ``auto`` (prefer measured ``cpu_seconds`` /
-        ``max_rss_mb`` when set, else Kubernetes requests), ``requests`` (pod
-        requests only), or ``usage`` (measured metrics only; no K8s lookup for
-        pricing, though requests may still be fetched for storage when possible).
-      version_added: 3.3.0
-      type: string
-      example: ~
-      default: "auto"
     cpu_price_per_core_hour:
       description: |
-        Cost multiplier per CPU core-hour. For **request**-based cost:
-        ``duration_hours * cpu_request_cores * price``. For **measured** CPU:
-        ``(cpu_seconds / 3600) * price`` (CPU time as core-hours).
+        Cost multiplier per CPU core-hour. FlowRate computes measured CPU cost
+        as ``(cpu_seconds / 3600) * price``.
       version_added: 3.3.0
       type: float
       example: ~
-      default: "0.031611"
+      default: "0.00"
     memory_price_per_gib_hour:
       description: |
-        Cost multiplier for memory in GiB-hours. For **requests**:
-        ``duration_hours * memory_request_gib * price``. For **measured** peak
-        RSS: ``(max_rss_mb / 1024) * duration_hours * price``.
+        Cost multiplier for memory in GiB-hours. FlowRate computes measured
+        memory cost as ``(max_rss_mb / 1024) * duration_hours * price`` using
+        peak RSS over the task duration.
       version_added: 3.3.0
       type: float
       example: ~
-      default: "0.004237"
-    kubernetes_namespace:
-      description: |
-        Kubernetes namespace used when looking up pod metadata for cost
-        calculation. Falls back to POD_NAMESPACE env var or "default".
-      version_added: 3.3.0
-      type: string
-      example: ~
-      default: "default"
+      default: "0.00"
