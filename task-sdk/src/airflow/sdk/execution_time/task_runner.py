@@ -1799,6 +1799,36 @@ def _push_xcom_if_needed(result: Any, ti: RuntimeTaskInstance, log: Logger):
     _xcom_push(ti, BaseXCom.XCOM_RETURN_KEY, result, mapped_length=mapped_length)
 
 
+def _save_flowrate_metric(ti: RuntimeTaskInstance, log: Logger) -> None:
+    """Persist FlowRate metrics for the current task attempt when available."""
+    if ti.end_date is None:
+        return
+
+    cpu_request = None
+    memory_request = None
+    resources = getattr(ti.task, "resources", None)
+
+    if resources is not None:
+        cpu_request = getattr(getattr(resources, "cpus", None), "qty", None)
+        memory_request = getattr(getattr(resources, "ram", None), "qty", None)
+
+    try:
+        from airflow.plugins.flowrate.persistence import save_task_metric
+
+        save_task_metric(
+            dag_id=ti.dag_id,
+            run_id=ti.run_id,
+            task_id=ti.task_id,
+            start_date=ti.start_date,
+            end_date=ti.end_date,
+            cpu_request=cpu_request,
+            memory_request=memory_request,
+            estimated_cost=None,
+        )
+    except Exception:
+        log.exception("Failed to save FlowRate metric during finalization", ti=ti)
+
+
 def finalize(
     ti: RuntimeTaskInstance,
     state: TaskInstanceState,
@@ -1813,6 +1843,7 @@ def finalize(
 
         Stats.timing(f"dag.{ti.dag_id}.{ti.task_id}.duration", duration_ms)
         Stats.timing("task.duration", duration_ms, tags=stats_tags)
+        _save_flowrate_metric(ti, log)
 
     task = ti.task
     # Pushing xcom for each operator extra links defined on the operator only.

@@ -15,44 +15,29 @@
 # KIND, either express or implied.  See the License for the
 # specific language governing permissions and limitations
 # under the License.
-"""
-This dag tests performance of simple bash commands executed with Airflow.
-"""
 
 from __future__ import annotations
 
-import datetime
+import time
 
-from airflow.operators.bash_operator import BashOperator
-from airflow.sdk import DAG
+from airflow.providers.standard.operators.python import PythonOperator
+from airflow.sdk import DAG, timezone
 
-args = {
-    "owner": "airflow",
-    "start_date": datetime.datetime(2022, 1, 1),
-}
 
-dag = DAG(
-    dag_id="perf_dag_1",
-    default_args=args,
-    schedule="@daily",
-    dagrun_timeout=datetime.timedelta(minutes=60),
-)
+def _demo_task() -> None:
+    time.sleep(2)
+    print("FlowRate demo task finished.")
 
-task_1 = BashOperator(
-    task_id="perf_task_1",
-    bash_command='sleep 5; echo "run_id={{ run_id }} | dag_run={{ dag_run }}"',
-    dag=dag,
-)
 
-for i in range(2, 5):
-    task = BashOperator(
-        task_id=f"perf_task_{i}",
-        bash_command="""
-            sleep 5; echo "run_id={{ run_id }} | dag_run={{ dag_run }}"
-        """,
-        dag=dag,
+with DAG(
+    dag_id="flowrate_demo_dag",
+    start_date=timezone.datetime(2024, 1, 1),
+    schedule=None,
+    catchup=False,
+    tags=["flowrate", "demo"],
+) as dag:
+    PythonOperator(
+        task_id="flowrate_demo_task",
+        python_callable=_demo_task,
+        resources={"cpus": 1, "ram": 256},
     )
-    task.set_upstream(task_1)
-
-if __name__ == "__main__":
-    dag.cli()

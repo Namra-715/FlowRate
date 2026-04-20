@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
@@ -38,6 +39,9 @@ def _is_flowrate_enabled() -> bool:
     try:
         return conf.getboolean("flowrate", "enabled")
     except Exception:
+        env_value = os.getenv("AIRFLOW__FLOWRATE__ENABLED")
+        if env_value is not None:
+            return env_value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
         log.debug("FlowRate configuration not found; treating as disabled.", exc_info=True)
         return False
 
