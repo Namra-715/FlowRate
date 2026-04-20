@@ -34,6 +34,7 @@ with DAG(
     start_date=timezone.datetime(2024, 1, 1),
     schedule=None,
     catchup=False,
+    enable_cost_metrics=True,
     tags=["flowrate", "demo"],
 ) as dag:
     PythonOperator(
