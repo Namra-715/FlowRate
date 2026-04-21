@@ -17,17 +17,31 @@
 # under the License.
 
 from __future__ import annotations
-
+import os
+import tempfile
 import time
-
 from airflow.providers.standard.operators.python import PythonOperator
 from airflow.sdk import DAG, timezone
 
 
 def _demo_task() -> None:
-    time.sleep(2)
-    print("FlowRate demo task finished.")
+    data = bytearray(32 * 1024 * 1024)
+    total = 0
 
+    for index in range(2000000):
+        total += index % 99
+
+    fd, path = tempfile.mkstemp(prefix="flowrate-demo-", suffix=".bin")
+    try:
+        with os.fdopen(fd, "wb") as handle:
+            handle.write(data)
+        with open(path, "rb") as handle:
+            handle.read()
+    finally:
+        os.remove(path)
+
+    time.sleep(1)
+    print(f"FlowRate demo task finished with total={total}.")
 
 with DAG(
     dag_id="flowrate_demo_dag",
@@ -40,5 +54,4 @@ with DAG(
     PythonOperator(
         task_id="flowrate_demo_task",
         python_callable=_demo_task,
-        resources={"cpus": 1, "ram": 256},
     )
