@@ -64,7 +64,7 @@ def estimate_cost_from_usage_metrics(
     duration_seconds: float,
     pricing: FlowRatePricing | None = None,
 ) -> float | None:
-    # Estimates cost from observed usage metrics instead of Kubernetes requests
+    # Estimates cost from observed local task usage metrics.
     if duration_seconds <= 0:
         return 0.0
     if cpu_seconds is None and max_rss_mb is None:
@@ -110,6 +110,11 @@ def persist_estimated_ti_cost(ti: TaskInstance, *, end_date: datetime | None = N
         task_id=ti.task_id,
         start_date=ti.start_date,
         end_date=effective_end,
+        cpu_seconds=cpu_seconds,
+        max_rss_mb=max_rss_mb,
+        avg_cpu_cores=getattr(ti, "avg_cpu_cores", None),
+        read_bytes=getattr(ti, "read_bytes", None),
+        write_bytes=getattr(ti, "write_bytes", None),
         estimated_cost=estimated_cost,
     )
 

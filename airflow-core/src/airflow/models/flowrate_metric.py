@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Float, Index
+from sqlalchemy import BigInteger, Float, Index
 from sqlalchemy.orm import Mapped, mapped_column
 
 from airflow.models.base import Base, StringID
@@ -47,11 +47,13 @@ class FlowRateMetric(Base):
     start_date: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
     end_date: Mapped[datetime | None] = mapped_column(UtcDateTime, nullable=True)
 
-    cpu_request: Mapped[float | None] = mapped_column(Float, nullable=True)
-    memory_request: Mapped[float | None] = mapped_column(Float, nullable=True)
+    cpu_seconds: Mapped[float | None] = mapped_column(Float, nullable=True)
+    max_rss_mb: Mapped[float | None] = mapped_column(Float, nullable=True)
+    avg_cpu_cores: Mapped[float | None] = mapped_column(Float, nullable=True)
+    read_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    write_bytes: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     estimated_cost: Mapped[float | None] = mapped_column(Float, nullable=True)
 
     __table_args__ = (
         Index("ix_flowrate_metric_dag_run_task", "dag_id", "run_id", "task_id"),
     )
-

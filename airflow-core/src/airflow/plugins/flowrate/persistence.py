@@ -53,8 +53,11 @@ def save_task_metric(
     task_id: str,
     start_date: datetime | None,
     end_date: datetime | None,
-    cpu_request: float | None = None,
-    memory_request: float | None = None,
+    cpu_seconds: float | None = None,
+    max_rss_mb: float | None = None,
+    avg_cpu_cores: float | None = None,
+    read_bytes: int | None = None,
+    write_bytes: int | None = None,
     estimated_cost: float | None = None,
     *,
     session: Session = NEW_SESSION,
@@ -74,8 +77,11 @@ def save_task_metric(
             task_id=task_id,
             start_date=start_date,
             end_date=end_date,
-            cpu_request=cpu_request,
-            memory_request=memory_request,
+            cpu_seconds=cpu_seconds,
+            max_rss_mb=max_rss_mb,
+            avg_cpu_cores=avg_cpu_cores,
+            read_bytes=read_bytes,
+            write_bytes=write_bytes,
             estimated_cost=estimated_cost,
         )
         session.add(metric)
@@ -233,4 +239,3 @@ def get_top_expensive_tasks(
         }
         for row in rows
     ]
-

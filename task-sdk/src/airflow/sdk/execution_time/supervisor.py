@@ -533,7 +533,7 @@ class WatchedSubprocess:
         proc = cls(
             pid=pid,
             stdin=read_requests,
-            _process=psutil.Process(pid),
+            process=psutil.Process(pid),
             process_log=logger,
             start_time=time.monotonic(),
             **constructor_kwargs,
@@ -1686,7 +1686,7 @@ class InProcessTestSupervisor(ActivitySubprocess):
         supervisor = cls(
             id=what.id,
             pid=os.getpid(),  # Use current process
-            _process=psutil.Process(),  # Current process
+            process=psutil.Process(),  # Current process
             process_log=logger or structlog.get_logger(logger_name="task").bind(),
             client=cls._api_client(task.dag),
             **kwargs,
@@ -1769,7 +1769,7 @@ class InProcessTestSupervisor(ActivitySubprocess):
         supervisor = cls(
             id=ti.id,
             pid=os.getpid(),  # Use current process
-            _process=psutil.Process(),  # Current process - note the underscore prefix
+            process=psutil.Process(),  # Current process
             process_log=structlog.get_logger(logger_name="task").bind(),
             client=cls._api_client(),
         )
