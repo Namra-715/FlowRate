@@ -29,6 +29,7 @@ import { ReactPlugin } from "../ReactPlugin";
 import { FavoriteDags } from "./FavoriteDags";
 import { Health } from "./Health";
 import { HistoricalMetrics } from "./HistoricalMetrics";
+import { MetricSummary } from "./MetricSummary";
 import { PoolSummary } from "./PoolSummary";
 import { Stats } from "./Stats";
 
@@ -76,16 +77,19 @@ export const Dashboard = () => {
             : translate("welcome")}
         </Heading>
         <Box order={3}>
-          <Stats />
+          <MetricSummary />
         </Box>
         <Box order={4}>
+          <Stats />
+        </Box>
+        <Box order={5}>
           <FavoriteDags />
         </Box>
-        <Box display="flex" flexDirection={{ base: "column", md: "row" }} gap={{ base: 4, md: 8 }} order={5}>
+        <Box display="flex" flexDirection={{ base: "column", md: "row" }} gap={{ base: 4, md: 8 }} order={6}>
           <Health />
           <PoolSummary />
         </Box>
-        <Box order={6}>
+        <Box order={7}>
           <HistoricalMetrics />
         </Box>
         {dashboardReactPlugins.map((plugin) => (
