@@ -50,8 +50,11 @@ def upgrade():
         sa.Column("task_id", StringID(), nullable=False),
         sa.Column("start_date", UtcDateTime, nullable=True),
         sa.Column("end_date", UtcDateTime, nullable=True),
-        sa.Column("cpu_request", sa.Float(), nullable=True),
-        sa.Column("memory_request", sa.Float(), nullable=True),
+        sa.Column("cpu_seconds", sa.Float(), nullable=True),
+        sa.Column("max_rss_mb", sa.Float(), nullable=True),
+        sa.Column("avg_cpu_cores", sa.Float(), nullable=True),
+        sa.Column("read_bytes", sa.BigInteger(), nullable=True),
+        sa.Column("write_bytes", sa.BigInteger(), nullable=True),
         sa.Column("estimated_cost", sa.Float(), nullable=True),
     )
     op.create_index(
@@ -65,4 +68,3 @@ def downgrade():
     """Drop flowrate_metric table."""
     op.drop_index("ix_flowrate_metric_dag_run_task", table_name="flowrate_metric", if_exists=True)
     op.drop_table("flowrate_metric")
-
