@@ -29,12 +29,14 @@ from airflow.api_fastapi.common.parameters import DateTimeQuery, OptionalDateTim
 from airflow.api_fastapi.common.router import AirflowRouter
 from airflow.api_fastapi.core_api.datamodels.ui.dashboard import (
     DashboardDagStatsResponse,
+    FlowRateSummaryResponse,
     HistoricalMetricDataResponse,
 )
 from airflow.api_fastapi.core_api.openapi.exceptions import create_openapi_http_exception_doc
 from airflow.api_fastapi.core_api.security import ReadableDagsFilterDep, requires_access_dag
 from airflow.models.dag import DagModel
 from airflow.models.dagrun import DagRun, DagRunType
+from airflow.models.flowrate_metric import FlowRateMetric
 from airflow.models.taskinstance import TaskInstance
 from airflow.utils.state import DagRunState, TaskInstanceState
 
@@ -171,4 +173,61 @@ def dag_stats(
         failed_dag_count=counts.failed,
         running_dag_count=counts.running,
         queued_dag_count=counts.queued,
+    )
+
+
+@dashboard_router.get(
+    "/flowrate_summary",
+    dependencies=[Depends(requires_access_dag(method="GET"))],
+)
+def flowrate_summary(
+    session: SessionDep,
+    start_date: DateTimeQuery,
+    readable_dags_filter: ReadableDagsFilterDep,
+    end_date: OptionalDateTimeQuery = None,
+) -> FlowRateSummaryResponse:
+    """Return aggregated FlowRate metrics for the dashboard summary cards."""
+    current_time = timezone.utcnow()
+    permitted_dag_ids = cast("set[str]", readable_dags_filter.value)
+
+    flowrate_filters = (
+        FlowRateMetric.dag_id.in_(permitted_dag_ids),
+        func.coalesce(FlowRateMetric.start_date, current_time) >= start_date,
+        func.coalesce(FlowRateMetric.end_date, current_time) <= func.coalesce(end_date, current_time),
+    )
+
+    distinct_dag_runs = (
+        select(FlowRateMetric.dag_id, FlowRateMetric.run_id)
+        .where(*flowrate_filters)
+        .distinct()
+        .subquery()
+    )
+
+    summary = session.execute(
+        select(
+            func.coalesce(func.sum(FlowRateMetric.estimated_cost), 0.0).label("total_estimated_cost"),
+            func.count(FlowRateMetric.id).label("tasks_tracked"),
+            select(func.count()).select_from(distinct_dag_runs).scalar_subquery().label("dag_run_count"),
+            func.coalesce(func.sum(FlowRateMetric.cpu_seconds), 0.0).label("total_cpu_seconds"),
+            func.coalesce(func.sum(FlowRateMetric.max_rss_mb), 0.0).label("total_memory_mb"),
+        )
+        .where(*flowrate_filters)
+    ).one()
+
+    average_cost_per_dag_run = (
+        summary.total_estimated_cost / summary.dag_run_count if summary.dag_run_count else 0.0
+    )
+
+    total_resource = summary.total_cpu_seconds + summary.total_memory_mb
+    cpu_percentage = summary.total_cpu_seconds / total_resource * 100 if total_resource else 0.0
+    memory_percentage = 100.0 - cpu_percentage if total_resource else 0.0
+
+    return FlowRateSummaryResponse(
+        total_estimated_cost=round(float(summary.total_estimated_cost), 2),
+        tasks_tracked=summary.tasks_tracked,
+        average_cost_per_dag_run=round(float(average_cost_per_dag_run), 2),
+        resource_split={
+            "cpu_percentage": round(float(cpu_percentage), 1),
+            "memory_percentage": round(float(memory_percentage), 1),
+        },
     )

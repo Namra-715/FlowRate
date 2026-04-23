@@ -17,6 +17,7 @@
  * under the License.
  */
 import { Box, Heading, VStack } from "@chakra-ui/react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { usePluginServiceGetPlugins } from "openapi/queries";
@@ -29,11 +30,12 @@ import { ReactPlugin } from "../ReactPlugin";
 import { FavoriteDags } from "./FavoriteDags";
 import { Health } from "./Health";
 import { HistoricalMetrics } from "./HistoricalMetrics";
-import { MetricSummary } from "./MetricSummary";
+import { MetricSummary, type FlowRateTab } from "./MetricSummary";
 import { PoolSummary } from "./PoolSummary";
 import { Stats } from "./Stats";
 
 export const Dashboard = () => {
+  const [activeFlowRateTab, setActiveFlowRateTab] = useState<FlowRateTab>("dashboard");
   const alerts = useConfig("dashboard_alert") as Array<UIAlert>;
   const { t: translate } = useTranslation("dashboard");
   const instanceName = useConfig("instance_name");
@@ -77,24 +79,28 @@ export const Dashboard = () => {
             : translate("welcome")}
         </Heading>
         <Box order={3}>
-          <MetricSummary />
+          <MetricSummary activeTab={activeFlowRateTab} onTabChange={setActiveFlowRateTab} />
         </Box>
-        <Box order={4}>
-          <Stats />
-        </Box>
-        <Box order={5}>
-          <FavoriteDags />
-        </Box>
-        <Box display="flex" flexDirection={{ base: "column", md: "row" }} gap={{ base: 4, md: 8 }} order={6}>
-          <Health />
-          <PoolSummary />
-        </Box>
-        <Box order={7}>
-          <HistoricalMetrics />
-        </Box>
-        {dashboardReactPlugins.map((plugin) => (
-          <ReactPlugin key={plugin.name} reactApp={plugin} />
-        ))}
+        {activeFlowRateTab === "dashboard" ? (
+          <>
+            <Box order={4}>
+              <Stats />
+            </Box>
+            <Box order={5}>
+              <FavoriteDags />
+            </Box>
+            <Box display="flex" flexDirection={{ base: "column", md: "row" }} gap={{ base: 4, md: 8 }} order={6}>
+              <Health />
+              <PoolSummary />
+            </Box>
+            <Box order={7}>
+              <HistoricalMetrics />
+            </Box>
+            {dashboardReactPlugins.map((plugin) => (
+              <ReactPlugin key={plugin.name} reactApp={plugin} />
+            ))}
+          </>
+        ) : null}
       </VStack>
     </Box>
   );

@@ -476,9 +476,7 @@ def _create_ti_state_update_query_and_update_state(
             ):
                 if getattr(ti_patch_payload, attr, None) is not None:
                     setattr(ti, attr, getattr(ti_patch_payload, attr))
-            serialized_dag = dag_bag.get_dag_for_run(ti.dag_run, session=session) if ti.dag_run else None
-            if getattr(serialized_dag, "enable_cost_metrics", False):
-                persist_estimated_ti_cost(ti, end_date=ti_patch_payload.end_date)
+            persist_estimated_ti_cost(ti, end_date=ti_patch_payload.end_date)
 
         if updated_state == TaskInstanceState.FAILED:
             # This is the only case needs extra handling for TITerminalStatePayload

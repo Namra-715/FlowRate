@@ -24,6 +24,7 @@ import pytest
 
 from airflow.models.dag import DagModel
 from airflow.models.dagbag import DBDagBag
+from airflow.models.flowrate_metric import FlowRateMetric
 from airflow.providers.standard.operators.empty import EmptyOperator
 from airflow.utils.state import DagRunState, TaskInstanceState
 from airflow.utils.types import DagRunType
@@ -324,6 +325,88 @@ class TestHistoricalMetricsDataEndpoint:
     def test_should_response_403(self, unauthorized_test_client):
         response = unauthorized_test_client.get(
             "/dashboard/historical_metrics_data", params={"start_date": "2023-02-02T00:00"}
+        )
+        assert response.status_code == 403
+
+
+@pytest.fixture
+def make_flowrate_metrics(session):
+    session.add_all(
+        [
+            FlowRateMetric(
+                dag_id="test_dag_id",
+                run_id="run_1",
+                task_id="task_1",
+                start_date=pendulum.DateTime(2023, 2, 1, 0, 0, 0, tzinfo=pendulum.UTC),
+                end_date=pendulum.DateTime(2023, 2, 1, 1, 0, 0, tzinfo=pendulum.UTC),
+                cpu_seconds=2.0,
+                max_rss_mb=4.0,
+                estimated_cost=1.25,
+            ),
+            FlowRateMetric(
+                dag_id="test_dag_id",
+                run_id="run_1",
+                task_id="task_2",
+                start_date=pendulum.DateTime(2023, 2, 1, 0, 30, 0, tzinfo=pendulum.UTC),
+                end_date=pendulum.DateTime(2023, 2, 1, 1, 30, 0, tzinfo=pendulum.UTC),
+                cpu_seconds=1.0,
+                max_rss_mb=2.0,
+                estimated_cost=0.75,
+            ),
+            FlowRateMetric(
+                dag_id="test_dag_id",
+                run_id="run_2",
+                task_id="task_1",
+                start_date=pendulum.DateTime(2023, 2, 2, 0, 0, 0, tzinfo=pendulum.UTC),
+                end_date=pendulum.DateTime(2023, 2, 2, 1, 0, 0, tzinfo=pendulum.UTC),
+                cpu_seconds=3.0,
+                max_rss_mb=3.0,
+                estimated_cost=2.0,
+            ),
+        ]
+    )
+    session.flush()
+
+
+class TestFlowRateSummaryEndpoint:
+    @pytest.mark.usefixtures("make_flowrate_metrics")
+    def test_should_response_200(self, test_client):
+        with assert_queries_count(1):
+            response = test_client.get(
+                "/dashboard/flowrate_summary",
+                params={"start_date": "2023-02-01T00:00", "end_date": "2023-02-03T00:00"},
+            )
+        assert response.status_code == 200
+        assert response.json() == {
+            "total_estimated_cost": 4.0,
+            "tasks_tracked": 3,
+            "average_cost_per_dag_run": 2.0,
+            "resource_split": {"cpu_percentage": 40.0, "memory_percentage": 60.0},
+        }
+
+    def test_should_response_200_with_no_metrics(self, test_client):
+        with assert_queries_count(1):
+            response = test_client.get(
+                "/dashboard/flowrate_summary",
+                params={"start_date": "2023-02-01T00:00", "end_date": "2023-02-03T00:00"},
+            )
+        assert response.status_code == 200
+        assert response.json() == {
+            "total_estimated_cost": 0.0,
+            "tasks_tracked": 0,
+            "average_cost_per_dag_run": 0.0,
+            "resource_split": {"cpu_percentage": 0.0, "memory_percentage": 0.0},
+        }
+
+    def test_should_response_401(self, unauthenticated_test_client):
+        response = unauthenticated_test_client.get(
+            "/dashboard/flowrate_summary", params={"start_date": "2023-02-01T00:00"}
+        )
+        assert response.status_code == 401
+
+    def test_should_response_403(self, unauthorized_test_client):
+        response = unauthorized_test_client.get(
+            "/dashboard/flowrate_summary", params={"start_date": "2023-02-01T00:00"}
         )
         assert response.status_code == 403
 

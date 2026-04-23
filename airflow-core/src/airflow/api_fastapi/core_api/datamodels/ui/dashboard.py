@@ -70,3 +70,19 @@ class DashboardDagStatsResponse(BaseModel):
     failed_dag_count: int
     running_dag_count: int
     queued_dag_count: int
+
+
+class FlowRateSummaryResourceSplit(BaseModel):
+    """FlowRate resource split serializer for responses."""
+
+    cpu_percentage: float
+    memory_percentage: float
+
+
+class FlowRateSummaryResponse(BaseModel):
+    """FlowRate dashboard summary serializer for responses."""
+
+    total_estimated_cost: float
+    tasks_tracked: int
+    average_cost_per_dag_run: float
+    resource_split: FlowRateSummaryResourceSplit
