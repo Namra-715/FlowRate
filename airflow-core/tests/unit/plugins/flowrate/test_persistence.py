@@ -27,7 +27,15 @@ from sqlalchemy.orm import Session as SASession
 from airflow.configuration import conf
 from airflow.models.base import metadata
 from airflow.models.flowrate_metric import FlowRateMetric
-from airflow.plugins.flowrate.persistence import save_task_metric
+from airflow.plugins.flowrate.cost_engine import FlowRatePricing, estimate_cost_auto, estimate_cost_from_usage_metrics
+from airflow.plugins.flowrate.persistence import (
+    get_dag_costs_by_window,
+    get_dag_run_cost,
+    get_task_costs,
+    get_top_expensive_dags,
+    get_top_expensive_tasks,
+    save_task_metric,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -134,3 +142,204 @@ def test_graceful_failure_when_db_unavailable(in_memory_session: SASession, capl
     # No rows should be created and no exception should propagate.
     assert _count_metrics(in_memory_session) == 0
     assert any("Failed to persist FlowRate metric" in message for message in caplog.messages)
+
+
+def test_estimate_cost_from_usage_metrics_matches_core_hours():
+    pricing = FlowRatePricing(cpu_price_per_core_hour=2.0, memory_price_per_gib_hour=0.0)
+    assert (
+        estimate_cost_from_usage_metrics(
+            cpu_seconds=7200.0,
+            max_rss_mb=None,
+            duration_seconds=3600.0,
+            pricing=pricing,
+        )
+        == 4.0
+    )
+
+
+def test_estimate_cost_auto_prefers_measured_cpu_over_k8s_request():
+    pricing = FlowRatePricing(cpu_price_per_core_hour=10.0, memory_price_per_gib_hour=1.0)
+    assert (
+        estimate_cost_auto(
+            cpu_seconds=3600.0,
+            max_rss_mb=None,
+            cpu_request_cores=4.0,
+            memory_request_gib=None,
+            duration_seconds=3600.0,
+            pricing=pricing,
+        )
+        == 10.0
+    )
+
+
+def test_estimate_cost_auto_falls_back_to_k8s_when_no_measured_metrics():
+    pricing = FlowRatePricing(cpu_price_per_core_hour=1.0, memory_price_per_gib_hour=2.0)
+    assert (
+        estimate_cost_auto(
+            cpu_seconds=None,
+            max_rss_mb=None,
+            cpu_request_cores=1.0,
+            memory_request_gib=1.0,
+            duration_seconds=3600.0,
+            pricing=pricing,
+        )
+        == 3.0
+    )
+
+
+# ---------------------------------------------------------------------------
+# Helpers for aggregation tests
+# ---------------------------------------------------------------------------
+
+
+def _insert_metric(
+    session: SASession,
+    dag_id: str,
+    run_id: str,
+    task_id: str,
+    estimated_cost: float,
+    start_date: datetime | None = None,
+    end_date: datetime | None = None,
+) -> None:
+    """Convenience wrapper to insert a FlowRateMetric row for tests."""
+    now = datetime.now(timezone.utc)
+    save_task_metric(
+        dag_id=dag_id,
+        run_id=run_id,
+        task_id=task_id,
+        start_date=start_date or now,
+        end_date=end_date or now,
+        estimated_cost=estimated_cost,
+        session=session,
+    )
+    session.flush()
+
+
+# ---------------------------------------------------------------------------
+# get_task_costs
+# ---------------------------------------------------------------------------
+
+
+def test_get_task_costs_returns_rows_for_run(in_memory_session: SASession):
+    _insert_metric(in_memory_session, "dag_a", "run_1", "task_1", 1.0)
+    _insert_metric(in_memory_session, "dag_a", "run_1", "task_2", 2.0)
+    _insert_metric(in_memory_session, "dag_a", "run_2", "task_3", 5.0)
+
+    rows = get_task_costs("dag_a", "run_1", session=in_memory_session)
+    assert len(rows) == 2
+    assert {r.task_id for r in rows} == {"task_1", "task_2"}
+
+
+def test_get_task_costs_empty_for_nonexistent_run(in_memory_session: SASession):
+    rows = get_task_costs("dag_x", "run_x", session=in_memory_session)
+    assert rows == []
+
+
+# ---------------------------------------------------------------------------
+# get_dag_run_cost
+# ---------------------------------------------------------------------------
+
+
+def test_get_dag_run_cost_sums_correctly(in_memory_session: SASession):
+    _insert_metric(in_memory_session, "dag_a", "run_1", "task_1", 1.5)
+    _insert_metric(in_memory_session, "dag_a", "run_1", "task_2", 2.5)
+
+    result = get_dag_run_cost("dag_a", "run_1", session=in_memory_session)
+    assert result == 4.0
+
+
+def test_get_dag_run_cost_returns_none_for_no_data(in_memory_session: SASession):
+    result = get_dag_run_cost("dag_x", "run_x", session=in_memory_session)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_dag_costs_by_window
+# ---------------------------------------------------------------------------
+
+
+def test_get_dag_costs_by_window_filters_correctly(in_memory_session: SASession):
+    t1 = datetime(2026, 4, 14, 10, 0, tzinfo=timezone.utc)
+    t2 = datetime(2026, 4, 14, 11, 0, tzinfo=timezone.utc)
+    t_outside = datetime(2026, 4, 14, 13, 0, tzinfo=timezone.utc)
+
+    _insert_metric(in_memory_session, "dag_a", "run_1", "task_1", 1.0, start_date=t1, end_date=t1)
+    _insert_metric(in_memory_session, "dag_a", "run_1", "task_2", 2.0, start_date=t2, end_date=t2)
+    _insert_metric(in_memory_session, "dag_a", "run_2", "task_3", 10.0, start_date=t_outside, end_date=t_outside)
+
+    window_start = datetime(2026, 4, 14, 9, 0, tzinfo=timezone.utc)
+    window_end = datetime(2026, 4, 14, 12, 0, tzinfo=timezone.utc)
+
+    result = get_dag_costs_by_window("dag_a", window_start, window_end, session=in_memory_session)
+    assert result is not None
+    assert result["total_cost"] == 3.0
+    assert result["task_count"] == 2
+
+
+def test_get_dag_costs_by_window_returns_none_when_empty(in_memory_session: SASession):
+    window_start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    window_end = datetime(2026, 1, 2, tzinfo=timezone.utc)
+
+    result = get_dag_costs_by_window("dag_x", window_start, window_end, session=in_memory_session)
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_top_expensive_dags
+# ---------------------------------------------------------------------------
+
+
+def test_get_top_expensive_dags_ordering_and_limit(in_memory_session: SASession):
+    t = datetime(2026, 4, 14, 10, 0, tzinfo=timezone.utc)
+    window_start = datetime(2026, 4, 14, 9, 0, tzinfo=timezone.utc)
+    window_end = datetime(2026, 4, 14, 12, 0, tzinfo=timezone.utc)
+
+    _insert_metric(in_memory_session, "cheap_dag", "run_1", "t1", 1.0, start_date=t, end_date=t)
+    _insert_metric(in_memory_session, "expensive_dag", "run_1", "t1", 10.0, start_date=t, end_date=t)
+    _insert_metric(in_memory_session, "expensive_dag", "run_1", "t2", 5.0, start_date=t, end_date=t)
+    _insert_metric(in_memory_session, "mid_dag", "run_1", "t1", 3.0, start_date=t, end_date=t)
+
+    result = get_top_expensive_dags(window_start, window_end, limit=2, session=in_memory_session)
+    assert len(result) == 2
+    assert result[0]["dag_id"] == "expensive_dag"
+    assert result[0]["total_cost"] == 15.0
+    assert result[1]["dag_id"] == "mid_dag"
+
+
+def test_get_top_expensive_dags_empty(in_memory_session: SASession):
+    window_start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    window_end = datetime(2026, 1, 2, tzinfo=timezone.utc)
+
+    result = get_top_expensive_dags(window_start, window_end, session=in_memory_session)
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# get_top_expensive_tasks
+# ---------------------------------------------------------------------------
+
+
+def test_get_top_expensive_tasks_ordering_and_limit(in_memory_session: SASession):
+    t = datetime(2026, 4, 14, 10, 0, tzinfo=timezone.utc)
+    window_start = datetime(2026, 4, 14, 9, 0, tzinfo=timezone.utc)
+    window_end = datetime(2026, 4, 14, 12, 0, tzinfo=timezone.utc)
+
+    _insert_metric(in_memory_session, "dag_a", "run_1", "cheap_task", 1.0, start_date=t, end_date=t)
+    _insert_metric(in_memory_session, "dag_a", "run_1", "expensive_task", 10.0, start_date=t, end_date=t)
+    _insert_metric(in_memory_session, "dag_a", "run_2", "expensive_task", 5.0, start_date=t, end_date=t)
+    _insert_metric(in_memory_session, "dag_b", "run_1", "mid_task", 3.0, start_date=t, end_date=t)
+
+    result = get_top_expensive_tasks(window_start, window_end, limit=2, session=in_memory_session)
+    assert len(result) == 2
+    assert result[0]["task_id"] == "expensive_task"
+    assert result[0]["total_cost"] == 15.0
+    assert result[0]["run_count"] == 2
+    assert result[1]["task_id"] == "mid_task"
+
+
+def test_get_top_expensive_tasks_empty(in_memory_session: SASession):
+    window_start = datetime(2026, 1, 1, tzinfo=timezone.utc)
+    window_end = datetime(2026, 1, 2, tzinfo=timezone.utc)
+
+    result = get_top_expensive_tasks(window_start, window_end, session=in_memory_session)
+    assert result == []

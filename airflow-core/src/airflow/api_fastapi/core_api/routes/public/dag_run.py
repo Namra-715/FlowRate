@@ -85,6 +85,7 @@ from airflow.api_fastapi.logging.decorators import action_logging
 from airflow.listeners.listener import get_listener_manager
 from airflow.models import DagModel, DagRun
 from airflow.models.asset import AssetEvent
+from airflow.models.flowrate_metric import FlowRateMetric
 from airflow.models.taskinstance import TaskInstance as TI
 from airflow.models.dag_version import DagVersion
 from airflow.utils.state import DagRunState
@@ -144,6 +145,14 @@ def get_dag_run(dag_id: str, dag_run_id: str, session: SessionDep) -> DAGRunResp
     avg_cpu_cores = None
     if total_cpu_seconds is not None and run_duration_seconds and run_duration_seconds > 0:
         avg_cpu_cores = round(total_cpu_seconds / run_duration_seconds, 4)
+    total_estimated_cost = session.scalar(
+        select(func.coalesce(func.sum(FlowRateMetric.estimated_cost), 0.0)).where(
+            FlowRateMetric.dag_id == dag_id,
+            FlowRateMetric.run_id == dag_run_id,
+        )
+    )
+    if total_estimated_cost == 0:
+        total_estimated_cost = None
 
     resp = DAGRunResponse.model_validate(dag_run)
     return resp.model_copy(
@@ -154,6 +163,7 @@ def get_dag_run(dag_id: str, dag_run_id: str, session: SessionDep) -> DAGRunResp
             "avg_cpu_cores": avg_cpu_cores,
             "total_read_bytes": total_read_bytes,
             "total_write_bytes": total_write_bytes,
+            "total_estimated_cost": float(total_estimated_cost) if total_estimated_cost is not None else None,
         }
     )
 

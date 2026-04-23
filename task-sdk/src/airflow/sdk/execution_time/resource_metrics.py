@@ -134,13 +134,23 @@ class LocalResourceCollector:
         self._max_rss_mb: float = 0.0
         self._last_cpu_sum: float = 0.0
         self._cpu_seconds_accumulated: float = 0.0
+        self._start_read_bytes: int = 0
+        self._start_write_bytes: int = 0
 
     def start(self) -> None:
         self._start_time = time.monotonic()
         self._max_rss_mb = 0.0
         self._samples = []
-        self._last_cpu_sum = 0.0
         self._cpu_seconds_accumulated = 0.0
+        self._start_read_bytes = 0
+        self._start_write_bytes = 0
+        procs = _get_process_tree(self._pid)
+        if procs:
+            self._max_rss_mb = _tree_rss_mb(procs)
+            self._last_cpu_sum = _tree_cpu_seconds(procs)
+            self._start_read_bytes, self._start_write_bytes = _tree_io_counters(procs)
+        else:
+            self._last_cpu_sum = 0.0
         self._stop_requested.clear()
         self._thread = threading.Thread(target=self._sample_loop, daemon=True)
         self._thread.start()
@@ -194,7 +204,9 @@ class LocalResourceCollector:
             delta = total_cpu - self._last_cpu_sum
             if delta > 0:
                 self._cpu_seconds_accumulated += delta
-        read_bytes, write_bytes = _tree_io_counters(procs) if procs else (0, 0)
+        final_read_bytes, final_write_bytes = _tree_io_counters(procs) if procs else (0, 0)
+        read_bytes = max(final_read_bytes - self._start_read_bytes, 0)
+        write_bytes = max(final_write_bytes - self._start_write_bytes, 0)
 
         cpu_seconds = round(self._cpu_seconds_accumulated, 3)
         avg_cpu_cores = (

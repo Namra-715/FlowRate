@@ -2262,6 +2262,55 @@ class TestRuntimeTaskInstance:
                 )
             ]
 
+    def test_finalize_persists_flowrate_metric(self, create_runtime_ti, mock_supervisor_comms, time_machine):
+        """Test that finalize persists FlowRate metrics with task timing and resources."""
+        instant = timezone.datetime(2024, 12, 3, 10, 0)
+        time_machine.move_to(instant, tick=False)
+
+        task = BaseOperator(task_id="task_with_resources", resources={"cpus": 2, "ram": 1024})
+        runtime_ti = create_runtime_ti(task=task)
+        runtime_ti.start_date = timezone.datetime(2024, 12, 3, 9, 55)
+        runtime_ti.end_date = instant
+
+        with mock.patch("airflow.plugins.flowrate.persistence.save_task_metric") as mock_save_task_metric:
+            finalize(
+                runtime_ti,
+                log=mock.MagicMock(),
+                state=TaskInstanceState.SUCCESS,
+                context=runtime_ti.get_template_context(),
+            )
+
+        mock_save_task_metric.assert_called_once_with(
+            dag_id=runtime_ti.dag_id,
+            run_id=runtime_ti.run_id,
+            task_id=runtime_ti.task_id,
+            start_date=runtime_ti.start_date,
+            end_date=runtime_ti.end_date,
+            cpu_request=2,
+            memory_request=1024,
+            estimated_cost=None,
+        )
+
+    def test_finalize_logs_flowrate_persistence_errors(self, create_runtime_ti, mock_supervisor_comms):
+        """Test that FlowRate persistence errors do not interrupt finalization."""
+        task = BaseOperator(task_id="task_with_resources", resources={"cpus": 1, "ram": 256})
+        runtime_ti = create_runtime_ti(task=task)
+        runtime_ti.end_date = runtime_ti.start_date
+        log = mock.MagicMock()
+
+        with mock.patch(
+            "airflow.plugins.flowrate.persistence.save_task_metric",
+            side_effect=RuntimeError("boom"),
+        ):
+            finalize(
+                runtime_ti,
+                log=log,
+                state=TaskInstanceState.SUCCESS,
+                context=runtime_ti.get_template_context(),
+            )
+
+        log.exception.assert_any_call("Failed to save FlowRate metric during finalization", ti=runtime_ti)
+
     @pytest.mark.parametrize(
         ("cmd", "rendered_cmd"),
         [

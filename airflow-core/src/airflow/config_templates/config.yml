@@ -2939,3 +2939,36 @@ profiling:
       type: string
       example: "scheduler,api,dag_processor"
       default: ~
+
+flowrate:
+  description: |
+    Configuration for FlowRate cost estimation and persistence on local
+    executor workloads. Primary input is measured ``cpu_seconds`` and
+    ``max_rss_mb`` from FlowRate-enabled DAGs
+    (``enable_cost_metrics=True``).
+  options:
+    enabled:
+      description: |
+        Enables FlowRate persistence and aggregation features. If disabled,
+        FlowRate metric reads and writes are no-ops.
+      version_added: 3.3.0
+      type: boolean
+      example: ~
+      default: "False"
+    cpu_price_per_core_hour:
+      description: |
+        Cost multiplier per CPU core-hour. FlowRate computes measured CPU cost
+        as ``(cpu_seconds / 3600) * price``.
+      version_added: 3.3.0
+      type: float
+      example: ~
+      default: "0.00"
+    memory_price_per_gib_hour:
+      description: |
+        Cost multiplier for memory in GiB-hours. FlowRate computes measured
+        memory cost as ``(max_rss_mb / 1024) * duration_hours * price`` using
+        peak RSS over the task duration.
+      version_added: 3.3.0
+      type: float
+      example: ~
+      default: "0.00"

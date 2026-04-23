@@ -70,6 +70,7 @@
     "runType": "Run Type",
     "sourceAssetEvent": "Source Asset Event",
     "totalCpuSeconds": "Total CPU (s)",
+    "totalEstimatedCost": "Estimated Cost",
     "totalReadBytes": "Total Read",
     "totalWriteBytes": "Total Write",
     "triggeredBy": "Triggered By",
