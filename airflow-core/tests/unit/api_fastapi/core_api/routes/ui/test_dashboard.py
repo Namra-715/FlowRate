@@ -411,6 +411,70 @@ class TestFlowRateSummaryEndpoint:
         assert response.status_code == 403
 
 
+class TestFlowRateTrendsEndpoint:
+    @pytest.mark.usefixtures("make_flowrate_metrics")
+    def test_should_response_200(self, test_client):
+        response = test_client.get(
+            "/dashboard/flowrate_trends",
+            params={"start_date": "2023-02-01T00:00", "end_date": "2023-02-03T00:00"},
+        )
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "pricing": {
+                "cpu_price_per_core_hour": 0.031611,
+                "memory_price_per_gib_hour": 0.004237,
+            },
+            "resource_split": {
+                "cpu_cost": 0.0,
+                "memory_cost": 0.0,
+                "cpu_percentage": 58.6,
+                "memory_percentage": 41.4,
+            },
+            "top_dags": [
+                {
+                    "dag_id": "test_dag_id",
+                    "runs": 2,
+                    "avg_duration_seconds": 3600.0,
+                    "status": "success",
+                    "estimated_cost": 4.0,
+                }
+            ],
+            "top_tasks": [
+                {
+                    "task_id": "task_1",
+                    "dag_id": "test_dag_id",
+                    "operator": None,
+                    "avg_duration_seconds": 3600.0,
+                    "avg_cpu_seconds": 2.5,
+                    "avg_max_rss_mb": 3.5,
+                    "avg_cost_per_run": 1.62,
+                },
+                {
+                    "task_id": "task_2",
+                    "dag_id": "test_dag_id",
+                    "operator": None,
+                    "avg_duration_seconds": 3600.0,
+                    "avg_cpu_seconds": 1.0,
+                    "avg_max_rss_mb": 2.0,
+                    "avg_cost_per_run": 0.75,
+                },
+            ],
+        }
+
+    def test_should_response_401(self, unauthenticated_test_client):
+        response = unauthenticated_test_client.get(
+            "/dashboard/flowrate_trends", params={"start_date": "2023-02-01T00:00"}
+        )
+        assert response.status_code == 401
+
+    def test_should_response_403(self, unauthorized_test_client):
+        response = unauthorized_test_client.get(
+            "/dashboard/flowrate_trends", params={"start_date": "2023-02-01T00:00"}
+        )
+        assert response.status_code == 403
+
+
 class TestDagStatsEndpoint:
     @pytest.mark.usefixtures("freeze_time_for_dagruns", "make_multiple_dags")
     def test_should_response_200_multiple_dags(self, test_client):

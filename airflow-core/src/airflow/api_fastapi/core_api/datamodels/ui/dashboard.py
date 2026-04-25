@@ -86,3 +86,50 @@ class FlowRateSummaryResponse(BaseModel):
     tasks_tracked: int
     average_cost_per_dag_run: float
     resource_split: FlowRateSummaryResourceSplit
+
+
+class FlowRateTrendsPricing(BaseModel):
+    """FlowRate trends pricing metadata."""
+
+    cpu_price_per_core_hour: float
+    memory_price_per_gib_hour: float
+
+
+class FlowRateTrendsResourceSplit(BaseModel):
+    """FlowRate trends resource split serializer for responses."""
+
+    cpu_cost: float
+    memory_cost: float
+    cpu_percentage: float
+    memory_percentage: float
+
+
+class FlowRateTrendsDagCostRow(BaseModel):
+    """Top DAG row for FlowRate trends."""
+
+    dag_id: str
+    runs: int
+    avg_duration_seconds: float
+    status: str
+    estimated_cost: float
+
+
+class FlowRateTrendsTaskCostRow(BaseModel):
+    """Top task row for FlowRate trends."""
+
+    task_id: str
+    dag_id: str
+    operator: str | None
+    avg_duration_seconds: float
+    avg_cpu_seconds: float
+    avg_max_rss_mb: float
+    avg_cost_per_run: float
+
+
+class FlowRateTrendsResponse(BaseModel):
+    """FlowRate trends serializer for responses."""
+
+    pricing: FlowRateTrendsPricing
+    resource_split: FlowRateTrendsResourceSplit
+    top_dags: list[FlowRateTrendsDagCostRow]
+    top_tasks: list[FlowRateTrendsTaskCostRow]

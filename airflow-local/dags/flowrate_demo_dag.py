@@ -17,6 +17,7 @@
 # under the License.
 
 from __future__ import annotations
+import inspect
 import os
 import tempfile
 import time
@@ -43,14 +44,19 @@ def _demo_task() -> None:
     time.sleep(1)
     print(f"FlowRate demo task finished with total={total}.")
 
-with DAG(
-    dag_id="flowrate_demo_dag",
-    start_date=timezone.datetime(2024, 1, 1),
-    schedule=None,
-    catchup=False,
-    enable_cost_metrics=True,
-    tags=["flowrate", "demo"],
-) as dag:
+dag_kwargs = {
+    "dag_id": "flowrate_demo_dag",
+    "start_date": timezone.datetime(2024, 1, 1),
+    "schedule": None,
+    "catchup": False,
+    "tags": ["flowrate", "demo"],
+}
+
+# Keep DAG importable on older Airflow runtimes while enabling cost metrics when supported.
+if "enable_cost_metrics" in inspect.signature(DAG.__init__).parameters:
+    dag_kwargs["enable_cost_metrics"] = True
+
+with DAG(**dag_kwargs) as dag:
     PythonOperator(
         task_id="flowrate_demo_task",
         python_callable=_demo_task,

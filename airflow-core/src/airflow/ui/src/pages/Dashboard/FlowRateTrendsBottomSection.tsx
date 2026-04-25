@@ -17,77 +17,12 @@
  * under the License.
  */
 import { Badge, Box, Flex, Grid, HStack, NativeSelect, Text, VStack } from "@chakra-ui/react";
-import { Fragment } from "react";
+import { Fragment, useMemo, useState } from "react";
 
-type DagCostRow = {
-  readonly avgDuration: string;
-  readonly dagId: string;
-  readonly estimatedCost: string;
-  readonly runs: number;
-  readonly status: "running" | "success";
-};
-
-type TaskCostRow = {
-  readonly avgCostPerRun: string;
-  readonly avgDuration: string;
-  readonly cpuReq: string;
-  readonly dagId: string;
-  readonly memoryReq: string;
-  readonly operator: string;
-  readonly operatorTone: "blue" | "purple";
-  readonly progressPercent: number;
-  readonly progressTone: "blue" | "orange" | "yellow";
-  readonly taskId: string;
-};
-
-const topDagRows: Array<DagCostRow> = [
-  { avgDuration: "12m 04s", dagId: "etl_customer_data", estimatedCost: "$38.20", runs: 47, status: "success" },
-  { avgDuration: "28m 11s", dagId: "dbt_transform_prod", estimatedCost: "$38.20", runs: 31, status: "success" },
-  { avgDuration: "3m 42s", dagId: "ml_feature_pipeline", estimatedCost: "$38.20", runs: 168, status: "success" },
-  { avgDuration: "7m 18s", dagId: "reporting_hourly", estimatedCost: "$38.20", runs: 56, status: "running" },
-  { avgDuration: "12m 04s", dagId: "data_quality_checks", estimatedCost: "$38.20", runs: 22, status: "success" },
-  { avgDuration: "18m 55s", dagId: "dbt_transform_prod", estimatedCost: "$38.20", runs: 7, status: "success" },
-  { avgDuration: "3m 42s", dagId: "archive_old_records", estimatedCost: "$38.20", runs: 47, status: "success" },
-];
-
-const topTaskRows: Array<TaskCostRow> = [
-  {
-    avgCostPerRun: "$0.38",
-    avgDuration: "22m 40s",
-    cpuReq: "4.0",
-    dagId: "ml_feature_pipeline",
-    memoryReq: "8 GB",
-    operator: "KubernetesPodOp",
-    operatorTone: "purple",
-    progressPercent: 100,
-    progressTone: "orange",
-    taskId: "train_model_step",
-  },
-  {
-    avgCostPerRun: "$0.22",
-    avgDuration: "8m 12s",
-    cpuReq: "2.0",
-    dagId: "etl_customer_data",
-    memoryReq: "4 GB",
-    operator: "BashOperator",
-    operatorTone: "blue",
-    progressPercent: 72,
-    progressTone: "yellow",
-    taskId: "extract_raw_data",
-  },
-  {
-    avgCostPerRun: "$0.14",
-    avgDuration: "17m 30s",
-    cpuReq: "1.0",
-    dagId: "dbt_transform_prod",
-    memoryReq: "2 GB",
-    operator: "BashOperator",
-    operatorTone: "blue",
-    progressPercent: 36,
-    progressTone: "blue",
-    taskId: "dbt_run_full_refresh",
-  },
-];
+import { ErrorAlert } from "src/components/ErrorAlert";
+import { useFlowRateTrends } from "src/queries/useFlowRateTrends";
+import type { FlowRateSummaryTimeframe } from "src/queries/useFlowRateSummary";
+import { useAutoRefresh } from "src/utils";
 
 const toneColor = {
   blue: "#4F88FF",
@@ -139,14 +74,55 @@ const cardStyles = {
   borderWidth: "1px",
 } as const;
 
+const formatCurrency = (value: number) =>
+  value.toLocaleString("en-US", {
+    currency: "USD",
+    maximumFractionDigits: 2,
+    minimumFractionDigits: 2,
+    style: "currency",
+  });
+
+const formatDuration = (seconds: number) => {
+  const safeSeconds = Math.max(0, Math.round(seconds));
+  const minutes = Math.floor(safeSeconds / 60);
+  const remainingSeconds = safeSeconds % 60;
+
+  return `${minutes}m ${remainingSeconds.toString().padStart(2, "0")}s`;
+};
+
 const renderProgressTrack = (percent: number, tone: keyof typeof toneColor) => (
   <Box backgroundColor="#26345E" borderRadius="full" h="4px" minW="82px" overflow="hidden" w="100%">
     <Box backgroundColor={toneColor[tone]} borderRadius="full" h="100%" width={`${Math.max(0, Math.min(100, percent))}%`} />
   </Box>
 );
 
-export const FlowRateTrendsBottomSection = () => (
-  <VStack align="stretch" gap={3} mt={4}>
+export const FlowRateTrendsBottomSection = () => {
+  const [timeframe, setTimeframe] = useState<FlowRateSummaryTimeframe>("7d");
+  const [selectedDagFilter, setSelectedDagFilter] = useState<string>("all_dags");
+  const refetchInterval = useAutoRefresh({ checkPendingRuns: true });
+  const trendsQuery = useFlowRateTrends({ refetchInterval, timeframe });
+  const trends = trendsQuery.data;
+
+  const maxDagCost = useMemo(
+    () => Math.max(1, ...(trends?.top_dags.map((row) => row.estimated_cost) ?? [1])),
+    [trends?.top_dags],
+  );
+  const filteredTopTasks = useMemo(
+    () =>
+      (trends?.top_tasks ?? []).filter((row) =>
+        selectedDagFilter === "all_dags" ? true : row.dag_id === selectedDagFilter,
+      ),
+    [selectedDagFilter, trends?.top_tasks],
+  );
+  const maxTaskCost = useMemo(
+    () => Math.max(1, ...(filteredTopTasks.map((row) => row.avg_cost_per_run) ?? [1])),
+    [filteredTopTasks],
+  );
+
+  return (
+    <VStack align="stretch" gap={3} mt={4}>
+      <ErrorAlert error={trendsQuery.error} />
+
     <Grid gap={3} templateColumns={{ base: "1fr", lg: "1.9fr 1fr" }}>
       <Box {...cardStyles} p={4}>
         <Flex align="center" justify="space-between" mb={3}>
@@ -155,7 +131,11 @@ export const FlowRateTrendsBottomSection = () => (
           </Text>
 
           <NativeSelect.Root size="sm" width="130px">
-            <NativeSelect.Field color="#95A1C4" defaultValue="7d">
+            <NativeSelect.Field
+              color="#95A1C4"
+              onChange={(event) => setTimeframe(event.currentTarget.value as FlowRateSummaryTimeframe)}
+              value={timeframe}
+            >
               <option value="24h">Last 24 hours</option>
               <option value="7d">Last 7 days</option>
               <option value="30d">Last 30 days</option>
@@ -175,37 +155,48 @@ export const FlowRateTrendsBottomSection = () => (
               &nbsp;
             </Text>
 
-            {topDagRows.map((row, index) => (
-              <Fragment key={`${row.dagId}-${index}-dag`}>
+            {(trends?.top_dags ?? []).map((row, index) => (
+              <Fragment key={`${row.dag_id}-${index}-dag`}>
                 <Text color="#4F88FF" fontSize="14px">
-                  {row.dagId}
+                  {row.dag_id}
                 </Text>
-                <Text {...cellTextStyle}>{row.runs}</Text>
-                <Text {...cellTextStyle}>{row.avgDuration}</Text>
+                <Text {...cellTextStyle}>{row.runs.toLocaleString("en-US")}</Text>
+                <Text {...cellTextStyle}>{formatDuration(row.avg_duration_seconds)}</Text>
                 <HStack align="center" spacing={2}>
                   <Badge
-                    backgroundColor={statusStyles[row.status].bg}
+                    backgroundColor={statusStyles[row.status === "running" ? "running" : "success"].bg}
                     borderRadius="full"
-                    color={statusStyles[row.status].color}
+                    color={statusStyles[row.status === "running" ? "running" : "success"].color}
                     fontSize="12px"
                     fontWeight={500}
                     px={2}
                     py={0.5}
                   >
                     <HStack gap={1.5}>
-                      <Box backgroundColor={statusStyles[row.status].dot} borderRadius="full" h="8px" w="8px" />
+                      <Box
+                        backgroundColor={statusStyles[row.status === "running" ? "running" : "success"].dot}
+                        borderRadius="full"
+                        h="8px"
+                        w="8px"
+                      />
                       <Text as="span" fontSize="12px">
                         {row.status}
                       </Text>
                     </HStack>
                   </Badge>
                 </HStack>
-                <Text {...cellTextStyle}>{row.estimatedCost}</Text>
+                <Text {...cellTextStyle}>{formatCurrency(row.estimated_cost)}</Text>
                 <Box alignSelf="center" minW="150px">
-                  {renderProgressTrack(100, "orange")}
+                  {renderProgressTrack((row.estimated_cost / maxDagCost) * 100, "orange")}
                 </Box>
               </Fragment>
             ))}
+
+            {!trendsQuery.isLoading && (trends?.top_dags ?? []).length === 0 ? (
+              <Text color="#7081AD" fontSize="13px">
+                No DAG metrics found for this window.
+              </Text>
+            ) : undefined}
           </Grid>
         </Box>
       </Box>
@@ -219,7 +210,9 @@ export const FlowRateTrendsBottomSection = () => (
           <Flex align="center" justify="center" mb={4}>
             <Box
               alignItems="center"
-              background="conic-gradient(#4F88FF 0 68%, #8F68FF 68% 100%)"
+              background={`conic-gradient(#4F88FF 0 ${trends?.resource_split.cpu_percentage ?? 0}%, #8F68FF ${
+                trends?.resource_split.cpu_percentage ?? 0
+              }% 100%)`}
               borderRadius="full"
               display="flex"
               h="108px"
@@ -230,7 +223,7 @@ export const FlowRateTrendsBottomSection = () => (
               <Box backgroundColor="#121A37" borderRadius="full" h="76px" w="76px" />
               <Box alignItems="center" display="flex" flexDirection="column" left="50%" position="absolute" top="50%" transform="translate(-50%, -50%)">
                 <Text color="#CAD4F0" fontSize="26px" fontWeight={500} lineHeight={1}>
-                  68%
+                  {(trends?.resource_split.cpu_percentage ?? 0).toFixed(0)}%
                 </Text>
                 <Text color="#5F6D92" fontSize="11px" fontWeight={500} letterSpacing="0.06em" textTransform="uppercase">
                   CPU
@@ -248,7 +241,7 @@ export const FlowRateTrendsBottomSection = () => (
                 </Text>
               </HStack>
               <Text color="#B7C1DF" fontSize="30px" fontWeight={300} lineHeight={1}>
-                $96.82
+                {formatCurrency(trends?.resource_split.cpu_cost ?? 0)}
               </Text>
             </Flex>
             <Flex align="center" justify="space-between">
@@ -259,7 +252,7 @@ export const FlowRateTrendsBottomSection = () => (
                 </Text>
               </HStack>
               <Text color="#B7C1DF" fontSize="30px" fontWeight={300} lineHeight={1}>
-                $45.56
+                {formatCurrency(trends?.resource_split.memory_cost ?? 0)}
               </Text>
             </Flex>
           </VStack>
@@ -271,10 +264,10 @@ export const FlowRateTrendsBottomSection = () => (
           </Text>
           <VStack align="stretch" gap={1}>
             <Text color="#7081AD" fontSize="16px">
-              $0.048 / vCPU-hr
+              ${Number(trends?.pricing.cpu_price_per_core_hour ?? 0).toFixed(6)} / vCPU-hr
             </Text>
             <Text color="#7081AD" fontSize="16px">
-              $0.006 / GB-hr
+              ${Number(trends?.pricing.memory_price_per_gib_hour ?? 0).toFixed(6)} / GB-hr
             </Text>
           </VStack>
           <Text color="#5F6D92" fontSize="12px" mt={3}>
@@ -290,8 +283,17 @@ export const FlowRateTrendsBottomSection = () => (
           Top Tasks by Estimated Cost
         </Text>
         <NativeSelect.Root size="sm" width="125px">
-          <NativeSelect.Field color="#95A1C4" defaultValue="all_dags">
+          <NativeSelect.Field
+            color="#95A1C4"
+            onChange={(event) => setSelectedDagFilter(event.currentTarget.value)}
+            value={selectedDagFilter}
+          >
             <option value="all_dags">All DAGs</option>
+            {(trends?.top_dags ?? []).map((row) => (
+              <option key={row.dag_id} value={row.dag_id}>
+                {row.dag_id}
+              </option>
+            ))}
           </NativeSelect.Field>
           <NativeSelect.Indicator />
         </NativeSelect.Root>
@@ -310,38 +312,48 @@ export const FlowRateTrendsBottomSection = () => (
             &nbsp;
           </Text>
 
-          {topTaskRows.map((row, index) => (
-            <Fragment key={`${row.taskId}-${index}-task`}>
+          {filteredTopTasks.map((row, index) => (
+            <Fragment key={`${row.task_id}-${index}-task`}>
               <Text color="#4F88FF" fontSize="14px">
-                {row.taskId}
+                {row.task_id}
               </Text>
-              <Text {...cellTextStyle}>{row.dagId}</Text>
+              <Text {...cellTextStyle}>{row.dag_id}</Text>
               <Badge
                 alignSelf="center"
-                backgroundColor={operatorStyles[row.operatorTone].bg}
+                backgroundColor={operatorStyles[row.operator?.toLowerCase().includes("kubernetes") ? "purple" : "blue"].bg}
                 borderRadius="full"
-                color={operatorStyles[row.operatorTone].color}
+                color={operatorStyles[row.operator?.toLowerCase().includes("kubernetes") ? "purple" : "blue"].color}
                 fontSize="12px"
                 fontWeight={500}
                 justifySelf="start"
                 px={2.5}
                 py={1}
               >
-                {row.operator}
+                {row.operator ?? "Unknown"}
               </Badge>
-              <Text {...cellTextStyle}>{row.avgDuration}</Text>
-              <Text {...cellTextStyle}>{row.cpuReq}</Text>
-              <Text {...cellTextStyle}>{row.memoryReq}</Text>
+              <Text {...cellTextStyle}>{formatDuration(row.avg_duration_seconds)}</Text>
+              <Text {...cellTextStyle}>{row.avg_cpu_seconds.toFixed(1)}</Text>
+              <Text {...cellTextStyle}>{(row.avg_max_rss_mb / 1024).toFixed(1)} GB</Text>
               <Text color="#D7DFF7" fontSize="24px" fontWeight={300} lineHeight={1}>
-                {row.avgCostPerRun}
+                {formatCurrency(row.avg_cost_per_run)}
               </Text>
               <Box alignSelf="center" minW="82px">
-                {renderProgressTrack(row.progressPercent, row.progressTone)}
+                {renderProgressTrack(
+                  (row.avg_cost_per_run / maxTaskCost) * 100,
+                  index === 0 ? "orange" : index === 1 ? "yellow" : "blue",
+                )}
               </Box>
             </Fragment>
           ))}
+
+          {!trendsQuery.isLoading && filteredTopTasks.length === 0 ? (
+            <Text color="#7081AD" fontSize="13px">
+              No task metrics found for this selection.
+            </Text>
+          ) : undefined}
         </Grid>
       </Box>
     </Box>
-  </VStack>
-);
+    </VStack>
+  );
+};
