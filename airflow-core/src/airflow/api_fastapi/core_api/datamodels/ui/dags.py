@@ -30,6 +30,9 @@ class DAGWithLatestDagRunsResponse(DAGResponse):
     latest_dag_runs: list[DAGRunLightResponse]
     pending_actions: list[HITLDetail]
     is_favorite: bool
+    number_of_runs: int
+    avg_duration: float | None
+    estimated_cost: float | None
 
 
 class DAGWithLatestDagRunsCollectionResponse(BaseModel):

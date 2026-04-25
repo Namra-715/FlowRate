@@ -71,7 +71,7 @@ export const DagCard = ({ dag }: Props) => {
           <DeleteDagButton dagDisplayName={dag.dag_display_name} dagId={dag.dag_id} />
         </HStack>
       </Flex>
-      <SimpleGrid columns={4} gap={1} height={20} px={3} py={1}>
+      <SimpleGrid columns={7} gap={1} height={20} px={3} py={1}>
         <Stat data-testid="schedule" label={translate("dagDetails.schedule")}>
           <Schedule
             assetExpression={dag.asset_expression}
@@ -106,6 +106,17 @@ export const DagCard = ({ dag }: Props) => {
               runAfter={dag.next_dagrun_run_after as string}
             />
           ) : undefined}
+        </Stat>
+        <Stat data-testid="number-of-runs" label="Number of Runs">
+          {dag.number_of_runs ?? "—"}
+        </Stat>
+        <Stat data-testid="avg-duration" label="Avg Duration">
+          {dag.avg_duration != null
+            ? `${Math.floor(dag.avg_duration / 60)}m ${String(Math.round(dag.avg_duration % 60)).padStart(2, "0")}s`
+            : "—"}
+        </Stat>
+        <Stat data-testid="estimated-cost" label="Est. Cost">
+          {dag.estimated_cost != null ? `$${dag.estimated_cost.toFixed(2)}` : "—"}
         </Stat>
         <RecentRuns latestRuns={dag.latest_dag_runs} />
       </SimpleGrid>
