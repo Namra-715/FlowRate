@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session as SASession
 from airflow.configuration import conf
 from airflow.models.base import metadata
 from airflow.models.flowrate_metric import FlowRateMetric
-from airflow.plugins.flowrate.cost_engine import FlowRatePricing, estimate_cost_auto, estimate_cost_from_usage_metrics
+from airflow.plugins.flowrate.cost_engine import FlowRatePricing, estimate_cost_from_usage_metrics
 from airflow.plugins.flowrate.persistence import (
     get_dag_costs_by_window,
     get_dag_run_cost,
@@ -73,14 +73,24 @@ def test_successful_insert(in_memory_session: SASession):
         task_id="task_1",
         start_date=now,
         end_date=now,
-        cpu_request=1.0,
-        memory_request=512.0,
+        cpu_seconds=12.5,
+        max_rss_mb=256.0,
+        avg_cpu_cores=0.75,
+        read_bytes=1024,
+        write_bytes=2048,
         estimated_cost=0.42,
         session=in_memory_session,
     )
 
     in_memory_session.flush()
     assert _count_metrics(in_memory_session) == 1
+    row = in_memory_session.scalar(select(FlowRateMetric))
+    assert row is not None
+    assert row.cpu_seconds == 12.5
+    assert row.max_rss_mb == 256.0
+    assert row.avg_cpu_cores == 0.75
+    assert row.read_bytes == 1024
+    assert row.write_bytes == 2048
 
 
 def test_duplicate_handling(in_memory_session: SASession):
@@ -98,8 +108,6 @@ def test_duplicate_handling(in_memory_session: SASession):
         task_id="task_1",
         start_date=now,
         end_date=now,
-        cpu_request=1.0,
-        memory_request=512.0,
         estimated_cost=0.42,
         session=in_memory_session,
     )
@@ -109,8 +117,6 @@ def test_duplicate_handling(in_memory_session: SASession):
         task_id="task_1",
         start_date=now,
         end_date=now,
-        cpu_request=2.0,
-        memory_request=1024.0,
         estimated_cost=0.84,
         session=in_memory_session,
     )
@@ -133,8 +139,6 @@ def test_graceful_failure_when_db_unavailable(in_memory_session: SASession, capl
             task_id="task_1",
             start_date=None,
             end_date=None,
-            cpu_request=None,
-            memory_request=None,
             estimated_cost=None,
             session=in_memory_session,
         )
@@ -154,36 +158,6 @@ def test_estimate_cost_from_usage_metrics_matches_core_hours():
             pricing=pricing,
         )
         == 4.0
-    )
-
-
-def test_estimate_cost_auto_prefers_measured_cpu_over_k8s_request():
-    pricing = FlowRatePricing(cpu_price_per_core_hour=10.0, memory_price_per_gib_hour=1.0)
-    assert (
-        estimate_cost_auto(
-            cpu_seconds=3600.0,
-            max_rss_mb=None,
-            cpu_request_cores=4.0,
-            memory_request_gib=None,
-            duration_seconds=3600.0,
-            pricing=pricing,
-        )
-        == 10.0
-    )
-
-
-def test_estimate_cost_auto_falls_back_to_k8s_when_no_measured_metrics():
-    pricing = FlowRatePricing(cpu_price_per_core_hour=1.0, memory_price_per_gib_hour=2.0)
-    assert (
-        estimate_cost_auto(
-            cpu_seconds=None,
-            max_rss_mb=None,
-            cpu_request_cores=1.0,
-            memory_request_gib=1.0,
-            duration_seconds=3600.0,
-            pricing=pricing,
-        )
-        == 3.0
     )
 
 

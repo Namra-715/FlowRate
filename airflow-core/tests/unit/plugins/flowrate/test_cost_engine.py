@@ -18,92 +18,19 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-
-import pytest
+from types import SimpleNamespace
+from unittest import mock
 
 from airflow.plugins.flowrate.cost_engine import (
     FlowRatePricing,
-    _parse_cpu_to_cores,
-    _parse_memory_to_gib,
     aggregate_costs_by_time_window,
-    estimate_cost,
-    estimate_cost_auto,
     estimate_cost_from_usage_metrics,
     floor_to_window,
+    persist_estimated_ti_cost,
     safe_round,
 )
 
 FIXED_PRICING = FlowRatePricing(cpu_price_per_core_hour=1.0, memory_price_per_gib_hour=1.0)
-
-
-# ---------------------------------------------------------------------------
-# estimate_cost (request-based)
-# ---------------------------------------------------------------------------
-
-
-class TestEstimateCost:
-    def test_normal_cpu_only(self):
-        result = estimate_cost(
-            cpu_request_cores=2.0,
-            memory_request_gib=None,
-            duration_seconds=3600.0,
-            pricing=FIXED_PRICING,
-        )
-        assert result == 2.0
-
-    def test_normal_memory_only(self):
-        result = estimate_cost(
-            cpu_request_cores=None,
-            memory_request_gib=4.0,
-            duration_seconds=3600.0,
-            pricing=FIXED_PRICING,
-        )
-        assert result == 4.0
-
-    def test_normal_both(self):
-        result = estimate_cost(
-            cpu_request_cores=1.0,
-            memory_request_gib=1.0,
-            duration_seconds=3600.0,
-            pricing=FIXED_PRICING,
-        )
-        assert result == 2.0
-
-    def test_zero_duration_returns_zero(self):
-        result = estimate_cost(
-            cpu_request_cores=2.0,
-            memory_request_gib=4.0,
-            duration_seconds=0.0,
-            pricing=FIXED_PRICING,
-        )
-        assert result == 0.0
-
-    def test_negative_duration_returns_zero(self):
-        result = estimate_cost(
-            cpu_request_cores=2.0,
-            memory_request_gib=4.0,
-            duration_seconds=-10.0,
-            pricing=FIXED_PRICING,
-        )
-        assert result == 0.0
-
-    def test_both_none_returns_none(self):
-        result = estimate_cost(
-            cpu_request_cores=None,
-            memory_request_gib=None,
-            duration_seconds=3600.0,
-            pricing=FIXED_PRICING,
-        )
-        assert result is None
-
-    def test_half_hour_duration(self):
-        result = estimate_cost(
-            cpu_request_cores=1.0,
-            memory_request_gib=None,
-            duration_seconds=1800.0,
-            pricing=FIXED_PRICING,
-        )
-        assert result == 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -158,88 +85,39 @@ class TestEstimateCostFromUsageMetrics:
         assert result is None
 
 
-# ---------------------------------------------------------------------------
-# estimate_cost_auto
-# ---------------------------------------------------------------------------
+def test_persist_estimated_ti_cost_persists_measured_metrics():
+    ti = SimpleNamespace(
+        dag_id="flowrate_demo_dag",
+        run_id="run_1",
+        task_id="flowrate_demo_task",
+        start_date=datetime(2026, 4, 21, 0, 0, tzinfo=timezone.utc),
+        end_date=datetime(2026, 4, 21, 1, 0, tzinfo=timezone.utc),
+        cpu_seconds=1800.0,
+        max_rss_mb=512.0,
+        avg_cpu_cores=0.5,
+        read_bytes=1024,
+        write_bytes=2048,
+    )
 
+    with (
+        mock.patch("airflow.plugins.flowrate.cost_engine.get_pricing", return_value=FIXED_PRICING),
+        mock.patch("airflow.plugins.flowrate.cost_engine.save_task_metric") as mock_save_task_metric,
+    ):
+        persist_estimated_ti_cost(ti)
 
-class TestEstimateCostAuto:
-    def test_all_none_returns_none(self):
-        result = estimate_cost_auto(
-            cpu_seconds=None,
-            max_rss_mb=None,
-            cpu_request_cores=None,
-            memory_request_gib=None,
-            duration_seconds=3600.0,
-            pricing=FIXED_PRICING,
-        )
-        assert result is None
-
-    def test_zero_duration_returns_zero(self):
-        result = estimate_cost_auto(
-            cpu_seconds=3600.0,
-            max_rss_mb=1024.0,
-            cpu_request_cores=1.0,
-            memory_request_gib=1.0,
-            duration_seconds=0.0,
-            pricing=FIXED_PRICING,
-        )
-        assert result == 0.0
-
-
-# ---------------------------------------------------------------------------
-# _parse_cpu_to_cores
-# ---------------------------------------------------------------------------
-
-
-class TestParseCpuToCores:
-    def test_millicores(self):
-        assert _parse_cpu_to_cores("500m") == 0.5
-
-    def test_whole_cores(self):
-        assert _parse_cpu_to_cores("1") == 1.0
-
-    def test_two_thousand_millicores(self):
-        assert _parse_cpu_to_cores("2000m") == 2.0
-
-    def test_empty_string_returns_none(self):
-        assert _parse_cpu_to_cores("") is None
-
-    def test_whitespace_only_returns_none(self):
-        assert _parse_cpu_to_cores("   ") is None
-
-    def test_fractional_cores(self):
-        assert _parse_cpu_to_cores("0.25") == 0.25
-
-
-# ---------------------------------------------------------------------------
-# _parse_memory_to_gib
-# ---------------------------------------------------------------------------
-
-
-class TestParseMemoryToGib:
-    def test_mebibytes(self):
-        result = _parse_memory_to_gib("512Mi")
-        assert result == pytest.approx(0.5)
-
-    def test_gibibytes(self):
-        assert _parse_memory_to_gib("1Gi") == 1.0
-
-    def test_kibibytes(self):
-        result = _parse_memory_to_gib("1048576Ki")
-        assert result == pytest.approx(1.0)
-
-    def test_tebibytes(self):
-        result = _parse_memory_to_gib("1Ti")
-        assert result == 1024.0
-
-    def test_empty_string_returns_none(self):
-        assert _parse_memory_to_gib("") is None
-
-    def test_raw_bytes(self):
-        result = _parse_memory_to_gib("1073741824")
-        assert result == pytest.approx(1.0)
-
+    mock_save_task_metric.assert_called_once_with(
+        dag_id="flowrate_demo_dag",
+        run_id="run_1",
+        task_id="flowrate_demo_task",
+        start_date=ti.start_date,
+        end_date=ti.end_date,
+        cpu_seconds=1800.0,
+        max_rss_mb=512.0,
+        avg_cpu_cores=0.5,
+        read_bytes=1024,
+        write_bytes=2048,
+        estimated_cost=1.0,
+    )
 
 # ---------------------------------------------------------------------------
 # floor_to_window
