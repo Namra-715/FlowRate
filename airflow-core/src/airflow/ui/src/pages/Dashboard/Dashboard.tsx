@@ -28,6 +28,7 @@ import { useConfig } from "src/queries/useConfig";
 
 import { ReactPlugin } from "../ReactPlugin";
 import { FavoriteDags } from "./FavoriteDags";
+import { FlowRateConfigurationSection } from "./FlowRateConfigurationSection";
 import { FlowRateTrendsBottomSection } from "./FlowRateTrendsBottomSection";
 import { Health } from "./Health";
 import { HistoricalMetrics } from "./HistoricalMetrics";
@@ -105,6 +106,11 @@ export const Dashboard = () => {
         {activeFlowRateTab === "trends" ? (
           <Box order={4}>
             <FlowRateTrendsBottomSection />
+          </Box>
+        ) : null}
+        {activeFlowRateTab === "configuration" ? (
+          <Box order={4}>
+            <FlowRateConfigurationSection />
           </Box>
         ) : null}
       </VStack>
