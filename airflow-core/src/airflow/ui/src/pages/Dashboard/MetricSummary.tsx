@@ -18,6 +18,7 @@
  */
 import { Badge, Box, Button, Flex, Grid, HStack, NativeSelect, Text } from "@chakra-ui/react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { FiChevronRight, FiRefreshCw } from "react-icons/fi";
 
 import { ErrorAlert } from "src/components/ErrorAlert";
@@ -27,21 +28,7 @@ import {
   type FlowRateSummaryTimeframe,
 } from "src/queries/useFlowRateSummary";
 import { useAutoRefresh } from "src/utils";
-
-type Trend = {
-  readonly direction: "down" | "up";
-  readonly label: string;
-  readonly tone: "positive" | "negative";
-};
-
-type SummaryCard = {
-  readonly accent?: "blue" | "purple";
-  readonly label: string;
-  readonly secondary?: string;
-  readonly suffix?: string;
-  readonly trend?: Trend;
-  readonly value: string;
-};
+import { buildTrend, formatCurrencyParts, toFiniteNumber, trendStyles, type SummaryCard, zeroSummary } from "./metricSummaryUtils";
 
 export type FlowRateTab = "configuration" | "dashboard" | "trends";
 
@@ -50,82 +37,36 @@ type MetricSummaryProps = {
   readonly onTabChange: (tab: FlowRateTab) => void;
 };
 
-const zeroSummary: FlowRateSummaryResponse = {
-  average_cost_per_dag_run: 0,
-  resource_split: {
-    cpu_percentage: 0,
-    memory_percentage: 0,
-  },
-  tasks_tracked: 0,
-  total_estimated_cost: 0,
-};
-
-const trendStyles = {
-  negative: {
-    bg: "red.subtle",
-    color: "fg.error",
-  },
-  positive: {
-    bg: "green.subtle",
-    color: "fg.success",
-  },
-} as const;
-
-const formatCurrencyParts = (value: number) => {
-  const [whole, fraction] = value.toFixed(2).split(".");
-
-  return {
-    suffix: `.${fraction}`,
-    value: Number(whole).toLocaleString("en-US", {
-      currency: "USD",
-      maximumFractionDigits: 0,
-      minimumFractionDigits: 0,
-      style: "currency",
-    }),
-  };
-};
-
-const formatDelta = (value: number) => {
-  const absoluteValue = Math.abs(value);
-
-  return `${absoluteValue >= 10 ? absoluteValue.toFixed(0) : absoluteValue.toFixed(1)}% vs prev`;
-};
-
-const buildTrend = ({
-  current,
-  increaseIsGood,
-  previous,
-}: {
-  readonly current: number;
-  readonly increaseIsGood: boolean;
-  readonly previous: number;
-}): Trend | undefined => {
-  if (previous <= 0) {
-    return undefined;
-  }
-
-  const delta = ((current - previous) / previous) * 100;
-
-  if (!Number.isFinite(delta)) {
-    return undefined;
-  }
-
-  return {
-    direction: delta >= 0 ? "up" : "down",
-    label: formatDelta(delta),
-    tone: increaseIsGood ? (delta >= 0 ? "positive" : "negative") : delta <= 0 ? "positive" : "negative",
-  };
-};
-
 export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) => {
+  const { t: translate } = useTranslation("dashboard");
   const [timeframe, setTimeframe] = useState<FlowRateSummaryTimeframe>("7d");
   const refetchInterval = useAutoRefresh({ checkPendingRuns: true });
 
   const currentSummaryQuery = useFlowRateSummary({ refetchInterval, timeframe });
   const previousSummaryQuery = useFlowRateSummary({ refetchInterval, timeframe, windowOffset: 1 });
 
-  const currentSummary = currentSummaryQuery.data ?? zeroSummary;
-  const previousSummary = previousSummaryQuery.data ?? zeroSummary;
+  const currentSummaryRaw = currentSummaryQuery.data ?? zeroSummary;
+  const previousSummaryRaw = previousSummaryQuery.data ?? zeroSummary;
+
+  const currentSummary: FlowRateSummaryResponse = {
+    average_cost_per_dag_run: toFiniteNumber(currentSummaryRaw.average_cost_per_dag_run),
+    resource_split: {
+      cpu_percentage: toFiniteNumber(currentSummaryRaw.resource_split.cpu_percentage),
+      memory_percentage: toFiniteNumber(currentSummaryRaw.resource_split.memory_percentage),
+    },
+    tasks_tracked: toFiniteNumber(currentSummaryRaw.tasks_tracked),
+    total_estimated_cost: toFiniteNumber(currentSummaryRaw.total_estimated_cost),
+  };
+
+  const previousSummary: FlowRateSummaryResponse = {
+    average_cost_per_dag_run: toFiniteNumber(previousSummaryRaw.average_cost_per_dag_run),
+    resource_split: {
+      cpu_percentage: toFiniteNumber(previousSummaryRaw.resource_split.cpu_percentage),
+      memory_percentage: toFiniteNumber(previousSummaryRaw.resource_split.memory_percentage),
+    },
+    tasks_tracked: toFiniteNumber(previousSummaryRaw.tasks_tracked),
+    total_estimated_cost: toFiniteNumber(previousSummaryRaw.total_estimated_cost),
+  };
 
   const totalEstimatedCost = formatCurrencyParts(currentSummary.total_estimated_cost);
   const averageCostPerDagRun = formatCurrencyParts(currentSummary.average_cost_per_dag_run);
@@ -178,26 +119,16 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
 
   return (
     <Box>
-      <Flex alignItems={{ base: "flex-start", md: "center" }} justifyContent="space-between" mb={5} gap={3}>
+      <Flex alignItems={{ base: "flex-start", md: "center" }} gap={3} justifyContent="space-between" mb={5}>
         <Box>
           <Text color="fg.muted" fontSize="sm" mb={1}>
-            Resource consumption & cost analysis · Apache Airflow plugin
+            {translate("flowrate.resourceConsumption", {
+              defaultValue: "Resource consumption & cost analysis · Apache Airflow plugin",
+            })}
           </Text>
           <HStack borderBottomColor="border.subtle" borderBottomWidth={1} gap={4} textStyle="sm">
             {flowRateTabs.map((tab) => (
               <Box
-                as="button"
-                aria-selected={activeTab === tab.key}
-                borderRadius="sm"
-                color={activeTab === tab.key ? "fg" : "fg.muted"}
-                fontWeight={activeTab === tab.key ? "semibold" : "normal"}
-                key={tab.key}
-                mb="-1px"
-                onClick={() => onTabChange(tab.key)}
-                pb={2}
-                px={0}
-                position="relative"
-                transition="color 0.2s ease"
                 _after={{
                   backgroundColor: activeTab === tab.key ? "border.info" : "transparent",
                   borderRadius: "full",
@@ -216,6 +147,18 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
                 _hover={{
                   color: "fg",
                 }}
+                aria-selected={activeTab === tab.key}
+                as="button"
+                borderRadius="sm"
+                color={activeTab === tab.key ? "fg" : "fg.muted"}
+                fontWeight={activeTab === tab.key ? "semibold" : "normal"}
+                key={tab.key}
+                mb="-1px"
+                onClick={() => onTabChange(tab.key)}
+                pb={2}
+                position="relative"
+                px={0}
+                transition="color 0.2s ease"
               >
                 {tab.label}
               </Box>
@@ -230,9 +173,9 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
                 onChange={(event) => setTimeframe(event.currentTarget.value as FlowRateSummaryTimeframe)}
                 value={timeframe}
               >
-                <option value="24h">Last 24 hours</option>
-                <option value="7d">Last 7 days</option>
-                <option value="30d">Last 30 days</option>
+                <option value="24h">{translate("flowrate.last24Hours", { defaultValue: "Last 24 hours" })}</option>
+                <option value="7d">{translate("flowrate.last7Days", { defaultValue: "Last 7 days" })}</option>
+                <option value="30d">{translate("flowrate.last30Days", { defaultValue: "Last 30 days" })}</option>
               </NativeSelect.Field>
               <NativeSelect.Indicator />
             </NativeSelect.Root>
@@ -247,7 +190,7 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
               variant="outline"
             >
               <FiRefreshCw />
-              Refresh
+              {translate("flowrate.refresh", { defaultValue: "Refresh" })}
             </Button>
           </HStack>
         ) : undefined}
@@ -316,12 +259,12 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
 
           <Flex justifyContent="flex-end" mt={3}>
             <Button color="fg.muted" size="sm" variant="ghost">
-              See More
+              {translate("flowrate.seeMore", { defaultValue: "See More" })}
               <FiChevronRight />
             </Button>
           </Flex>
         </>
-      ) : null}
+      ) : undefined}
     </Box>
   );
 };
