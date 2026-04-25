@@ -64,6 +64,34 @@ export const toFiniteNumber = (value: unknown, fallback = 0): number => {
   return Number.isFinite(parsed) ? parsed : fallback;
 };
 
+type SummarySource =
+  | FlowRateSummaryResponse
+  | {
+      average_cost_per_dag_run?: unknown;
+      resource_split?: {
+        cpu_percentage?: unknown;
+        memory_percentage?: unknown;
+      } | null;
+      tasks_tracked?: unknown;
+      total_estimated_cost?: unknown;
+    }
+  | null
+  | undefined;
+
+export const normalizeSummary = (source: SummarySource): FlowRateSummaryResponse => {
+  const resourceSplit = source?.resource_split ?? {};
+
+  return {
+    average_cost_per_dag_run: toFiniteNumber(source?.average_cost_per_dag_run),
+    resource_split: {
+      cpu_percentage: toFiniteNumber(resourceSplit.cpu_percentage),
+      memory_percentage: toFiniteNumber(resourceSplit.memory_percentage),
+    },
+    tasks_tracked: toFiniteNumber(source?.tasks_tracked),
+    total_estimated_cost: toFiniteNumber(source?.total_estimated_cost),
+  };
+};
+
 export const formatCurrencyParts = (value: number) => {
   const [whole, fraction] = toFiniteNumber(value).toFixed(2).split(".");
 

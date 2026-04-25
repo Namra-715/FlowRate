@@ -23,12 +23,19 @@ import { FiChevronRight, FiRefreshCw } from "react-icons/fi";
 
 import { ErrorAlert } from "src/components/ErrorAlert";
 import {
-  useFlowRateSummary,
   type FlowRateSummaryResponse,
   type FlowRateSummaryTimeframe,
+  useFlowRateSummary,
 } from "src/queries/useFlowRateSummary";
 import { useAutoRefresh } from "src/utils";
-import { buildTrend, formatCurrencyParts, toFiniteNumber, trendStyles, type SummaryCard, zeroSummary } from "./metricSummaryUtils";
+import {
+  buildTrend,
+  formatCurrencyParts,
+  toFiniteNumber,
+  trendStyles,
+  type SummaryCard,
+  zeroSummary,
+} from "./metricSummaryUtils";
 
 export type FlowRateTab = "configuration" | "dashboard" | "trends";
 
@@ -45,27 +52,34 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
   const currentSummaryQuery = useFlowRateSummary({ refetchInterval, timeframe });
   const previousSummaryQuery = useFlowRateSummary({ refetchInterval, timeframe, windowOffset: 1 });
 
-  const currentSummaryRaw = currentSummaryQuery.data ?? zeroSummary;
-  const previousSummaryRaw = previousSummaryQuery.data ?? zeroSummary;
+  const currentSummaryRaw = (currentSummaryQuery.data ?? zeroSummary) as
+    | ({
+        resource_split?: Partial<FlowRateSummaryResponse["resource_split"]> | null;
+      } & Partial<FlowRateSummaryResponse>)
+    | undefined;
+  const previousSummaryRaw = (previousSummaryQuery.data ?? zeroSummary) as
+    | ({
+        resource_split?: Partial<FlowRateSummaryResponse["resource_split"]> | null;
+      } & Partial<FlowRateSummaryResponse>)
+    | undefined;
 
   const currentSummary: FlowRateSummaryResponse = {
-    average_cost_per_dag_run: toFiniteNumber(currentSummaryRaw.average_cost_per_dag_run),
+    average_cost_per_dag_run: toFiniteNumber(currentSummaryRaw?.average_cost_per_dag_run),
     resource_split: {
-      cpu_percentage: toFiniteNumber(currentSummaryRaw.resource_split.cpu_percentage),
-      memory_percentage: toFiniteNumber(currentSummaryRaw.resource_split.memory_percentage),
+      cpu_percentage: toFiniteNumber(currentSummaryRaw?.resource_split?.cpu_percentage),
+      memory_percentage: toFiniteNumber(currentSummaryRaw?.resource_split?.memory_percentage),
     },
-    tasks_tracked: toFiniteNumber(currentSummaryRaw.tasks_tracked),
-    total_estimated_cost: toFiniteNumber(currentSummaryRaw.total_estimated_cost),
+    tasks_tracked: toFiniteNumber(currentSummaryRaw?.tasks_tracked),
+    total_estimated_cost: toFiniteNumber(currentSummaryRaw?.total_estimated_cost),
   };
-
   const previousSummary: FlowRateSummaryResponse = {
-    average_cost_per_dag_run: toFiniteNumber(previousSummaryRaw.average_cost_per_dag_run),
+    average_cost_per_dag_run: toFiniteNumber(previousSummaryRaw?.average_cost_per_dag_run),
     resource_split: {
-      cpu_percentage: toFiniteNumber(previousSummaryRaw.resource_split.cpu_percentage),
-      memory_percentage: toFiniteNumber(previousSummaryRaw.resource_split.memory_percentage),
+      cpu_percentage: toFiniteNumber(previousSummaryRaw?.resource_split?.cpu_percentage),
+      memory_percentage: toFiniteNumber(previousSummaryRaw?.resource_split?.memory_percentage),
     },
-    tasks_tracked: toFiniteNumber(previousSummaryRaw.tasks_tracked),
-    total_estimated_cost: toFiniteNumber(previousSummaryRaw.total_estimated_cost),
+    tasks_tracked: toFiniteNumber(previousSummaryRaw?.tasks_tracked),
+    total_estimated_cost: toFiniteNumber(previousSummaryRaw?.total_estimated_cost),
   };
 
   const totalEstimatedCost = formatCurrencyParts(currentSummary.total_estimated_cost);
