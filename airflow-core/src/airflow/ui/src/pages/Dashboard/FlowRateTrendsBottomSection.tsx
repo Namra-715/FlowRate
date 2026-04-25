@@ -17,6 +17,7 @@
  * under the License.
  */
 import { Badge, Box, Flex, Grid, HStack, NativeSelect, Text, VStack } from "@chakra-ui/react";
+import { Select as ReactSelect, type SingleValue } from "chakra-react-select";
 import { Fragment, useMemo, useState } from "react";
 
 import { ErrorAlert } from "src/components/ErrorAlert";
@@ -74,6 +75,11 @@ const cardStyles = {
   borderWidth: "1px",
 } as const;
 
+type DagFilterOption = {
+  readonly label: string;
+  readonly value: string;
+};
+
 const formatCurrency = (value: number) =>
   value.toLocaleString("en-US", {
     currency: "USD",
@@ -118,6 +124,15 @@ export const FlowRateTrendsBottomSection = () => {
     () => Math.max(1, ...(filteredTopTasks.map((row) => row.avg_cost_per_run) ?? [1])),
     [filteredTopTasks],
   );
+  const dagFilterOptions = useMemo<Array<DagFilterOption>>(
+    () => [
+      { label: "All DAGs", value: "all_dags" },
+      ...(trends?.top_dags ?? []).map((row) => ({ label: row.dag_id, value: row.dag_id })),
+    ],
+    [trends?.top_dags],
+  );
+  const selectedDagFilterOption =
+    dagFilterOptions.find((option) => option.value === selectedDagFilter) ?? dagFilterOptions[0];
 
   return (
     <VStack align="stretch" gap={3} mt={4}>
@@ -282,21 +297,50 @@ export const FlowRateTrendsBottomSection = () => {
         <Text color="#CBD4F1" fontSize="lg" fontWeight={600}>
           Top Tasks by Estimated Cost
         </Text>
-        <NativeSelect.Root size="sm" width="125px">
-          <NativeSelect.Field
-            color="#95A1C4"
-            onChange={(event) => setSelectedDagFilter(event.currentTarget.value)}
-            value={selectedDagFilter}
-          >
-            <option value="all_dags">All DAGs</option>
-            {(trends?.top_dags ?? []).map((row) => (
-              <option key={row.dag_id} value={row.dag_id}>
-                {row.dag_id}
-              </option>
-            ))}
-          </NativeSelect.Field>
-          <NativeSelect.Indicator />
-        </NativeSelect.Root>
+        <Box minW="220px" width="220px">
+          <ReactSelect
+            chakraStyles={{
+              control: (provided) => ({
+                ...provided,
+                backgroundColor: "#0F1731",
+                borderColor: "#2B3A6E",
+                minHeight: "32px",
+              }),
+              dropdownIndicator: (provided) => ({
+                ...provided,
+                color: "#95A1C4",
+              }),
+              input: (provided) => ({
+                ...provided,
+                color: "#95A1C4",
+              }),
+              menu: (provided) => ({
+                ...provided,
+                zIndex: 2,
+              }),
+              option: (provided, state) => ({
+                ...provided,
+                backgroundColor: state.isFocused ? "#26345E" : "#121A37",
+                color: "#95A1C4",
+              }),
+              placeholder: (provided) => ({
+                ...provided,
+                color: "#95A1C4",
+              }),
+              singleValue: (provided) => ({
+                ...provided,
+                color: "#95A1C4",
+              }),
+            }}
+            isSearchable
+            menuPlacement="auto"
+            noOptionsMessage={() => "No DAGs found"}
+            onChange={(option: SingleValue<DagFilterOption>) => setSelectedDagFilter(option?.value ?? "all_dags")}
+            options={dagFilterOptions}
+            placeholder="All DAGs"
+            value={selectedDagFilterOption}
+          />
+        </Box>
       </Flex>
 
       <Box overflowX="auto">

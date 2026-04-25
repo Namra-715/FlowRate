@@ -17,20 +17,22 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime
-from typing import cast
+from datetime import datetime, timedelta
+from typing import Any, cast
 
 from fastapi import Depends, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql.expression import case, false
 
 from airflow._shared.timezones import timezone
+from airflow.configuration import conf
 from airflow.api_fastapi.auth.managers.models.resource_details import DagAccessEntity
 from airflow.api_fastapi.common.db.common import SessionDep
 from airflow.api_fastapi.common.parameters import DateTimeQuery, OptionalDateTimeQuery
 from airflow.api_fastapi.common.router import AirflowRouter
 from airflow.api_fastapi.core_api.datamodels.ui.dashboard import (
     DashboardDagStatsResponse,
+    FlowRateConfiguration,
     FlowRateSummaryResponse,
     FlowRateTrendsResponse,
     HistoricalMetricDataResponse,
@@ -40,11 +42,16 @@ from airflow.api_fastapi.core_api.security import ReadableDagsFilterDep, require
 from airflow.models.dag import DagModel
 from airflow.models.dagrun import DagRun, DagRunType
 from airflow.models.flowrate_metric import FlowRateMetric
+from airflow.models.variable import Variable
 from airflow.plugins.flowrate.cost_engine import get_pricing
 from airflow.utils.state import DagRunState, TaskInstanceState
 
 TOP_DAGS_LIMIT = 7
 TOP_TASKS_LIMIT = 10
+FLOWRATE_RETENTION_DAYS_DEFAULT = 7
+FLOWRATE_RETENTION_DAYS_MIN = 1
+FLOWRATE_RETENTION_DAYS_MAX = 365
+FLOWRATE_CONFIGURATION_VARIABLE_KEY = "flowrate.ui.configuration"
 
 
 def _duration_seconds(start_date: datetime | None, end_date: datetime | None) -> float:
@@ -61,7 +68,101 @@ def _average(values: list[float]) -> float:
     return sum(values) / len(values)
 
 
+def _default_flowrate_configuration() -> FlowRateConfiguration:
+    enabled = False
+    try:
+        enabled = conf.getboolean("flowrate", "enabled")
+    except Exception:
+        enabled = False
+
+    return FlowRateConfiguration(
+        enabled=enabled,
+        retention_days=FLOWRATE_RETENTION_DAYS_DEFAULT,
+    )
+
+
+def _parse_bool(value: Any, fallback: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "t", "yes", "y", "on"}:
+            return True
+        if lowered in {"0", "false", "f", "no", "n", "off"}:
+            return False
+
+    if isinstance(value, int):
+        return value != 0
+
+    return fallback
+
+
+def _sanitize_retention_days(value: Any, fallback: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+    return min(max(parsed, FLOWRATE_RETENTION_DAYS_MIN), FLOWRATE_RETENTION_DAYS_MAX)
+
+
+def _sanitize_flowrate_configuration(raw_value: Any) -> FlowRateConfiguration:
+    defaults = _default_flowrate_configuration()
+
+    if not isinstance(raw_value, dict):
+        return defaults
+
+    return FlowRateConfiguration(
+        enabled=_parse_bool(raw_value.get("enabled"), defaults.enabled),
+        retention_days=_sanitize_retention_days(raw_value.get("retention_days"), defaults.retention_days),
+    )
+
+
+def _load_flowrate_configuration() -> FlowRateConfiguration:
+    try:
+        value = Variable.get(
+            FLOWRATE_CONFIGURATION_VARIABLE_KEY,
+            default_var=None,
+            deserialize_json=True,
+        )
+    except Exception:
+        value = None
+
+    return _sanitize_flowrate_configuration(value)
+
+
 dashboard_router = AirflowRouter(tags=["Dashboard"], prefix="/dashboard")
+
+
+@dashboard_router.get(
+    "/flowrate_configuration",
+    dependencies=[Depends(requires_access_dag(method="GET"))],
+)
+def flowrate_configuration() -> FlowRateConfiguration:
+    """Return saved FlowRate UI configuration values."""
+    return _load_flowrate_configuration()
+
+
+@dashboard_router.put(
+    "/flowrate_configuration",
+    dependencies=[Depends(requires_access_dag(method="PUT"))],
+)
+def update_flowrate_configuration(
+    configuration: FlowRateConfiguration,
+    session: SessionDep,
+) -> FlowRateConfiguration:
+    """Persist FlowRate UI configuration values."""
+    sanitized_configuration = _sanitize_flowrate_configuration(configuration.model_dump())
+    Variable.set(
+        key=FLOWRATE_CONFIGURATION_VARIABLE_KEY,
+        value=sanitized_configuration.model_dump(),
+        serialize_json=True,
+        session=session,
+    )
+    session.flush()
+
+    return sanitized_configuration
 
 
 @dashboard_router.get(
@@ -208,12 +309,26 @@ def flowrate_summary(
     end_date: OptionalDateTimeQuery = None,
 ) -> FlowRateSummaryResponse:
     """Return aggregated FlowRate metrics for the dashboard summary cards."""
+    flowrate_configuration = _load_flowrate_configuration()
+    if not flowrate_configuration.enabled:
+        return FlowRateSummaryResponse(
+            total_estimated_cost=0.0,
+            tasks_tracked=0,
+            average_cost_per_dag_run=0.0,
+            resource_split={
+                "cpu_percentage": 0.0,
+                "memory_percentage": 0.0,
+            },
+        )
+
     current_time = timezone.utcnow()
+    retention_start_date = current_time - timedelta(days=flowrate_configuration.retention_days)
+    effective_start_date = max(start_date, retention_start_date)
     permitted_dag_ids = cast("set[str]", readable_dags_filter.value)
 
     flowrate_filters = (
         FlowRateMetric.dag_id.in_(permitted_dag_ids),
-        func.coalesce(FlowRateMetric.start_date, current_time) >= start_date,
+        func.coalesce(FlowRateMetric.start_date, current_time) >= effective_start_date,
         func.coalesce(FlowRateMetric.end_date, current_time) <= func.coalesce(end_date, current_time),
     )
 
@@ -265,13 +380,32 @@ def flowrate_trends(
     end_date: OptionalDateTimeQuery = None,
 ) -> FlowRateTrendsResponse:
     """Return FlowRate trends data for top DAG and task visualizations."""
-    current_time = timezone.utcnow()
-    permitted_dag_ids = cast("set[str]", readable_dags_filter.value)
+    flowrate_configuration = _load_flowrate_configuration()
     pricing = get_pricing()
+    if not flowrate_configuration.enabled:
+        return FlowRateTrendsResponse(
+            pricing={
+                "cpu_price_per_core_hour": round(float(pricing.cpu_price_per_core_hour), 6),
+                "memory_price_per_gib_hour": round(float(pricing.memory_price_per_gib_hour), 6),
+            },
+            resource_split={
+                "cpu_cost": 0.0,
+                "memory_cost": 0.0,
+                "cpu_percentage": 0.0,
+                "memory_percentage": 0.0,
+            },
+            top_dags=[],
+            top_tasks=[],
+        )
+
+    current_time = timezone.utcnow()
+    retention_start_date = current_time - timedelta(days=flowrate_configuration.retention_days)
+    effective_start_date = max(start_date, retention_start_date)
+    permitted_dag_ids = cast("set[str]", readable_dags_filter.value)
 
     flowrate_filters = (
         FlowRateMetric.dag_id.in_(permitted_dag_ids),
-        func.coalesce(FlowRateMetric.start_date, current_time) >= start_date,
+        func.coalesce(FlowRateMetric.start_date, current_time) >= effective_start_date,
         func.coalesce(FlowRateMetric.end_date, current_time) <= func.coalesce(end_date, current_time),
     )
 

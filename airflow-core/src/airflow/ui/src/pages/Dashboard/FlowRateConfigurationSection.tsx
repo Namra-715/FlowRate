@@ -19,10 +19,14 @@
 import { Box, Button, Flex, Grid, HStack, Input, Text, VStack } from "@chakra-ui/react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useLocalStorage } from "usehooks-ts";
 
+import { ErrorAlert } from "src/components/ErrorAlert";
 import { Switch } from "src/components/ui";
-import { FLOWRATE_CONFIGURATION_KEY } from "src/constants/localStorage";
+import {
+  type FlowRateConfiguration,
+  useFlowRateConfiguration,
+  useUpdateFlowRateConfiguration,
+} from "src/queries/useFlowRateConfiguration";
 
 const surfaceStyles = {
   backgroundColor: "#121A37",
@@ -44,10 +48,13 @@ type ConfigRowProps = {
   readonly label: string;
 };
 
-type FlowRateConfigurationValues = {
+type FlowRateConfigurationDraft = {
   readonly isEnabled: boolean;
   readonly retentionDays: string;
 };
+
+const RETENTION_DAYS_MIN = 1;
+const RETENTION_DAYS_MAX = 365;
 
 const ConfigRow = ({ children, helper, label }: ConfigRowProps) => (
   <Grid
@@ -72,19 +79,53 @@ const ConfigRow = ({ children, helper, label }: ConfigRowProps) => (
 
 export const FlowRateConfigurationSection = () => {
   const { t: translate } = useTranslation("dashboard");
-  const defaultConfig: FlowRateConfigurationValues = {
+  const configurationQuery = useFlowRateConfiguration();
+  const updateConfigurationMutation = useUpdateFlowRateConfiguration();
+
+  const defaultConfig: FlowRateConfigurationDraft = {
     isEnabled: true,
     retentionDays: "7",
   };
-  const [savedConfig, setSavedConfig] = useLocalStorage<FlowRateConfigurationValues>(
-    FLOWRATE_CONFIGURATION_KEY,
-    defaultConfig,
-  );
+  const [savedConfig, setSavedConfig] = useState(defaultConfig);
   const [draftConfig, setDraftConfig] = useState(defaultConfig);
 
   useEffect(() => {
-    setDraftConfig(savedConfig);
-  }, [savedConfig]);
+    if (!configurationQuery.data) {
+      return;
+    }
+
+    const nextConfig: FlowRateConfigurationDraft = {
+      isEnabled: configurationQuery.data.enabled,
+      retentionDays: configurationQuery.data.retention_days.toString(),
+    };
+
+    setSavedConfig(nextConfig);
+    setDraftConfig(nextConfig);
+  }, [configurationQuery.data]);
+
+  const parsedRetentionDays = Number.parseInt(draftConfig.retentionDays, 10);
+  const isRetentionValid =
+    Number.isInteger(parsedRetentionDays) &&
+    parsedRetentionDays >= RETENTION_DAYS_MIN &&
+    parsedRetentionDays <= RETENTION_DAYS_MAX;
+
+  const saveConfiguration = async () => {
+    if (!isRetentionValid) {
+      return;
+    }
+
+    const payload: FlowRateConfiguration = {
+      enabled: draftConfig.isEnabled,
+      retention_days: parsedRetentionDays,
+    };
+    const updatedConfiguration = await updateConfigurationMutation.mutateAsync(payload);
+    const nextSavedConfig: FlowRateConfigurationDraft = {
+      isEnabled: updatedConfiguration.enabled,
+      retentionDays: updatedConfiguration.retention_days.toString(),
+    };
+    setSavedConfig(nextSavedConfig);
+    setDraftConfig(nextSavedConfig);
+  };
 
   const hasChanges =
     draftConfig.isEnabled !== savedConfig.isEnabled || draftConfig.retentionDays !== savedConfig.retentionDays;
@@ -104,14 +145,22 @@ export const FlowRateConfigurationSection = () => {
         </Box>
 
         <HStack align="flex-start" justify={{ base: "flex-start", md: "flex-end" }}>
-          <Button onClick={() => setDraftConfig(defaultConfig)} size="sm" variant="outline" disabled={!hasChanges}>
+          <Button
+            disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending || !hasChanges}
+            onClick={() => setDraftConfig(defaultConfig)}
+            size="sm"
+            variant="outline"
+          >
             {translate("flowrate.resetToDefaults", { defaultValue: "Reset to defaults" })}
           </Button>
           <Button
             backgroundColor="#4F7BFF"
             color="#F7FAFF"
-            disabled={!hasChanges}
-            onClick={() => setSavedConfig(draftConfig)}
+            disabled={
+              configurationQuery.isLoading || updateConfigurationMutation.isPending || !hasChanges || !isRetentionValid
+            }
+            loading={updateConfigurationMutation.isPending}
+            onClick={() => void saveConfiguration()}
             size="sm"
             _hover={{ backgroundColor: "#6A90FF" }}
           >
@@ -119,6 +168,8 @@ export const FlowRateConfigurationSection = () => {
           </Button>
         </HStack>
       </Flex>
+
+      <ErrorAlert error={configurationQuery.error ?? updateConfigurationMutation.error} />
 
       <Flex {...infoBannerStyles} align={{ base: "flex-start", md: "center" }} gap={3} px={4} py={3}>
         <Text color="#9DB8FF" fontSize="sm">
@@ -170,6 +221,7 @@ export const FlowRateConfigurationSection = () => {
                 backgroundColor="#0F1731"
                 borderColor="#2B3A6E"
                 color="#E6ECFF"
+                disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
                 maxW="96px"
                 onChange={(event) =>
                   setDraftConfig((currentConfig) => ({
@@ -186,6 +238,13 @@ export const FlowRateConfigurationSection = () => {
                 {translate("flowrate.daysLabel", { defaultValue: "days" })}
               </Text>
             </HStack>
+            {draftConfig.retentionDays !== "" && !isRetentionValid ? (
+              <Text color="#FF7A45" fontSize="12px" mt={2} textAlign={{ base: "left", md: "right" }}>
+                {translate("flowrate.retentionValidation", {
+                  defaultValue: "Enter a value between 1 and 365 days.",
+                })}
+              </Text>
+            ) : undefined}
           </ConfigRow>
 
         </Box>

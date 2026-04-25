@@ -133,3 +133,10 @@ class FlowRateTrendsResponse(BaseModel):
     resource_split: FlowRateTrendsResourceSplit
     top_dags: list[FlowRateTrendsDagCostRow]
     top_tasks: list[FlowRateTrendsTaskCostRow]
+
+
+class FlowRateConfiguration(BaseModel):
+    """FlowRate configuration serializer for responses and requests."""
+
+    enabled: bool
+    retention_days: int
