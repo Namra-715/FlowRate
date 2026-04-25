@@ -66,6 +66,7 @@ from airflow.api_fastapi.core_api.security import (
 )
 from airflow.models import DagModel, DagRun
 from airflow.models.dag_favorite import DagFavorite
+from airflow.models.flowrate_metric import FlowRateMetric
 from airflow.models.hitl import HITLDetail
 from airflow.models.taskinstance import TaskInstance
 from airflow.utils.state import TaskInstanceState
@@ -210,6 +211,34 @@ def get_dags(
 
     recent_dag_runs = session.execute(recent_dag_runs_select)
 
+    # Fetch number_of_runs and avg_duration per DAG
+    dag_ids = [dag.dag_id for dag in dags]
+    dag_stats_select = (
+        select(
+            DagRun.dag_id,
+            func.count(DagRun.id).label("number_of_runs"),
+            func.avg(DagRun.duration.expression).label("avg_duration"),  # type: ignore[attr-defined]
+        )
+        .where(DagRun.dag_id.in_(dag_ids))
+        .group_by(DagRun.dag_id)
+    )
+    dag_stats_by_id = {row.dag_id: row for row in session.execute(dag_stats_select)}
+
+    # Fetch estimated_cost per DAG from FlowRateMetric
+    try:
+        cost_select = (
+            select(
+                FlowRateMetric.dag_id,
+                func.sum(FlowRateMetric.estimated_cost).label("estimated_cost"),
+            )
+            .where(FlowRateMetric.dag_id.in_(dag_ids))
+            .group_by(FlowRateMetric.dag_id)
+        )
+        cost_by_dag_id = {row.dag_id: row.estimated_cost for row in session.execute(cost_select)}
+    except Exception:
+        session.rollback()
+        cost_by_dag_id = {}
+
     # Fetch pending HITL actions for each Dag if we are not certain whether some of the Dag might contain HITL actions
     pending_actions_by_dag_id: dict[str, list[HITLDetail]] = {dag.dag_id: [] for dag in dags}
     if has_pending_actions.value:
@@ -244,12 +273,16 @@ def get_dags(
             )
             for field_name in DAGResponse.model_fields
         }
+        stats = dag_stats_by_id.get(dag.dag_id)
         dag_data.update(
             {
                 "asset_expression": dag.asset_expression,
                 "latest_dag_runs": [],
                 "pending_actions": pending_actions_by_dag_id[dag.dag_id],
                 "is_favorite": dag.dag_id in favorite_dag_ids,
+                "number_of_runs": stats.number_of_runs if stats else 0,
+                "avg_duration": stats.avg_duration if stats else None,
+                "estimated_cost": cost_by_dag_id.get(dag.dag_id),
             }
         )
         dag_runs_by_dag_id[dag.dag_id] = DAGWithLatestDagRunsResponse.model_validate(dag_data)

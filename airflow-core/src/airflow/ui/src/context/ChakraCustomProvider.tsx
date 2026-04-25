@@ -21,19 +21,15 @@ import type { PropsWithChildren } from "react";
 
 import type { Theme } from "openapi/requests/types.gen";
 import { useConfig } from "src/queries/useConfig";
-import { createTheme } from "src/theme";
+import { createTheme, defaultSystem } from "src/theme";
 
 export const ChakraCustomProvider = ({ children }: PropsWithChildren) => {
   const theme = useConfig("theme");
 
-  let system = undefined;
+  const system = typeof theme !== "undefined" ? createTheme(theme as Theme) : defaultSystem;
 
-  if (typeof theme !== "undefined") {
-    system = createTheme(theme as Theme);
+  // Once the system is created, make it globally available to dynamically imported React plugins.
+  Reflect.set(globalThis, "ChakraUISystem", system);
 
-    // Once the system is created, make it globally available to dynamically imported React plugins.
-    Reflect.set(globalThis, "ChakraUISystem", system);
-  }
-
-  return system && <ChakraProvider value={system}>{children}</ChakraProvider>;
+  return <ChakraProvider value={system}>{children}</ChakraProvider>;
 };

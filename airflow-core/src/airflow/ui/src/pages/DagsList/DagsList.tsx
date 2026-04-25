@@ -138,6 +138,31 @@ const createColumns = (
     header: () => translate("dagDetails.tags"),
   },
   {
+    accessorKey: "number_of_runs",
+    cell: ({ row: { original } }) => original.number_of_runs ?? "—",
+    enableSorting: false,
+    header: "Number of Runs",
+  },
+  {
+    accessorKey: "avg_duration",
+    cell: ({ row: { original } }) => {
+      const secs = original.avg_duration;
+      if (secs == null) return "—";
+      const m = Math.floor(secs / 60);
+      const s = Math.round(secs % 60);
+      return `${m}m ${s.toString().padStart(2, "0")}s`;
+    },
+    enableSorting: false,
+    header: "Average Duration",
+  },
+  {
+    accessorKey: "estimated_cost",
+    cell: ({ row: { original } }) =>
+      original.estimated_cost != null ? `$${original.estimated_cost.toFixed(2)}` : "—",
+    enableSorting: false,
+    header: "Estimated Cost",
+  },
+  {
     accessorKey: "pending_actions",
     cell: ({ row: { original: dag } }) => (
       <NeedsReviewBadge dagId={dag.dag_id} pendingActions={dag.pending_actions} />

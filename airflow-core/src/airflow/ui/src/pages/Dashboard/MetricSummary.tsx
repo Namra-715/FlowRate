@@ -19,6 +19,8 @@
 import { Badge, Box, Button, Flex, Grid, HStack, NativeSelect, Text } from "@chakra-ui/react";
 import { FiChevronRight, FiRefreshCw } from "react-icons/fi";
 
+export type Tab = "Dashboard" | "Trends" | "Configuration";
+
 type Trend = {
   readonly label: string;
   readonly tone: "positive" | "negative";
@@ -73,7 +75,14 @@ const trendStyles = {
   },
 } as const;
 
-export const MetricSummary = () => (
+type Props = {
+  readonly activeTab: Tab;
+  readonly onTabChange: (tab: Tab) => void;
+};
+
+export const MetricSummary = ({ activeTab, onTabChange }: Props) => {
+
+  return (
   <Box>
     <Flex alignItems={{ base: "flex-start", md: "center" }} justifyContent="space-between" mb={5} gap={3}>
       <Box>
@@ -81,11 +90,20 @@ export const MetricSummary = () => (
           Resource consumption & cost analysis · Apache Airflow plugin
         </Text>
         <HStack color="fg.muted" gap={6} textStyle="sm">
-          <Text borderBottomWidth="2px" borderColor="brand.solid" color="fg" fontWeight="semibold" pb={1}>
-            Dashboard
-          </Text>
-          <Text>Trends</Text>
-          <Text>Configuration</Text>
+          {(["Dashboard", "Trends", "Configuration"] as Tab[]).map((tab) => (
+            <Text
+              key={tab}
+              borderBottomWidth="2px"
+              borderColor={activeTab === tab ? "brand.solid" : "transparent"}
+              color={activeTab === tab ? "fg" : "fg.muted"}
+              cursor="pointer"
+              fontWeight={activeTab === tab ? "semibold" : "normal"}
+              onClick={() => onTabChange(tab)}
+              pb={1}
+            >
+              {tab}
+            </Text>
+          ))}
         </HStack>
       </Box>
 
@@ -106,63 +124,80 @@ export const MetricSummary = () => (
       </HStack>
     </Flex>
 
-    <Grid gap={4} templateColumns={{ base: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" }}>
-      {summaryCards.map((card) => (
-        <Box
-          backgroundColor="bg.muted"
-          borderColor="border.subtle"
-          borderRadius="lg"
-          borderWidth="1px"
-          key={card.label}
-          minH="112px"
-          p={4}
-        >
-          <Text color="fg.muted" fontSize="xs" letterSpacing="0.06em" mb={3}>
-            {card.label}
-          </Text>
-
-          <HStack alignItems="baseline" gap={1} mb={3}>
-            <Text color={card.accent === "blue" ? "blue.fg" : "fg.emphasized"} fontSize="4xl" fontWeight="semibold" lineHeight={1}>
-              {card.value}
-            </Text>
-
-            {card.suffix === undefined ? undefined : (
-              <Text color={card.accent === "blue" ? "fg.muted" : "fg.subtle"} fontSize="lg" fontWeight="semibold">
-                {card.suffix}
-              </Text>
-            )}
-
-            {card.secondary === undefined ? undefined : (
-              <Text color="purple.fg" fontSize="4xl" fontWeight="semibold" lineHeight={1}>
-                {card.secondary}
-              </Text>
-            )}
-          </HStack>
-
-          {card.trend === undefined ? (
-            <Badge borderRadius="md" colorPalette="gray" px={2} py={1}>
-              7-day window
-            </Badge>
-          ) : (
-            <Badge
-              backgroundColor={trendStyles[card.trend.tone].bg}
-              borderRadius="md"
-              color={trendStyles[card.trend.tone].color}
-              px={2}
-              py={1}
+    {activeTab === "Dashboard" && (
+      <>
+        <Grid gap={4} templateColumns={{ base: "1fr", md: "repeat(2, minmax(0, 1fr))", xl: "repeat(4, minmax(0, 1fr))" }}>
+          {summaryCards.map((card) => (
+            <Box
+              backgroundColor="bg.muted"
+              borderColor="border.subtle"
+              borderRadius="lg"
+              borderWidth="1px"
+              key={card.label}
+              minH="112px"
+              p={4}
             >
-              {trendStyles[card.trend.tone].prefix} {card.trend.label}
-            </Badge>
-          )}
-        </Box>
-      ))}
-    </Grid>
+              <Text color="fg.muted" fontSize="xs" letterSpacing="0.06em" mb={3}>
+                {card.label}
+              </Text>
 
-    <Flex justifyContent="flex-end" mt={3}>
-      <Button color="fg.muted" size="sm" variant="ghost">
-        See More
-        <FiChevronRight />
-      </Button>
-    </Flex>
+              <HStack alignItems="baseline" gap={1} mb={3}>
+                <Text color={card.accent === "blue" ? "blue.fg" : "fg.emphasized"} fontSize="4xl" fontWeight="semibold" lineHeight={1}>
+                  {card.value}
+                </Text>
+
+                {card.suffix === undefined ? undefined : (
+                  <Text color={card.accent === "blue" ? "fg.muted" : "fg.subtle"} fontSize="lg" fontWeight="semibold">
+                    {card.suffix}
+                  </Text>
+                )}
+
+                {card.secondary === undefined ? undefined : (
+                  <Text color="purple.fg" fontSize="4xl" fontWeight="semibold" lineHeight={1}>
+                    {card.secondary}
+                  </Text>
+                )}
+              </HStack>
+
+              {card.trend === undefined ? (
+                <Badge borderRadius="md" colorPalette="gray" px={2} py={1}>
+                  7-day window
+                </Badge>
+              ) : (
+                <Badge
+                  backgroundColor={trendStyles[card.trend.tone].bg}
+                  borderRadius="md"
+                  color={trendStyles[card.trend.tone].color}
+                  px={2}
+                  py={1}
+                >
+                  {trendStyles[card.trend.tone].prefix} {card.trend.label}
+                </Badge>
+              )}
+            </Box>
+          ))}
+        </Grid>
+
+        <Flex justifyContent="flex-end" mt={3}>
+          <Button color="fg.muted" size="sm" variant="ghost">
+            See More
+            <FiChevronRight />
+          </Button>
+        </Flex>
+      </>
+    )}
+
+    {activeTab === "Trends" && (
+      <Box color="fg.muted" py={8} textAlign="center">
+        Trends coming soon
+      </Box>
+    )}
+
+    {activeTab === "Configuration" && (
+      <Box color="fg.muted" py={8} textAlign="center">
+        Configuration coming soon
+      </Box>
+    )}
   </Box>
-);
+  );
+};
