@@ -28,6 +28,7 @@ import { useConfig } from "src/queries/useConfig";
 
 import { ReactPlugin } from "../ReactPlugin";
 import { FavoriteDags } from "./FavoriteDags";
+import { FlowRateTrendsBottomSection } from "./FlowRateTrendsBottomSection";
 import { Health } from "./Health";
 import { HistoricalMetrics } from "./HistoricalMetrics";
 import { MetricSummary, type FlowRateTab } from "./MetricSummary";
@@ -100,6 +101,11 @@ export const Dashboard = () => {
               <ReactPlugin key={plugin.name} reactApp={plugin} />
             ))}
           </>
+        ) : null}
+        {activeFlowRateTab === "trends" ? (
+          <Box order={4}>
+            <FlowRateTrendsBottomSection />
+          </Box>
         ) : null}
       </VStack>
     </Box>
