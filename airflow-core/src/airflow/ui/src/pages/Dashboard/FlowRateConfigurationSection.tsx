@@ -16,9 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Box, Button, Flex, Grid, HStack, Input, Text, VStack } from "@chakra-ui/react";
+import { Box, Button, Flex, Grid, HStack, Input, NativeSelect, Text, VStack } from "@chakra-ui/react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { TbAlertTriangle } from "react-icons/tb";
 
 import { ErrorAlert } from "src/components/ErrorAlert";
 import { Switch } from "src/components/ui";
@@ -27,6 +28,22 @@ import {
   useFlowRateConfiguration,
   useUpdateFlowRateConfiguration,
 } from "src/queries/useFlowRateConfiguration";
+
+type CloudProfile = {
+  readonly cpuPrice: string;
+  readonly label: string;
+  readonly memoryPrice: string;
+  readonly value: string;
+};
+
+const CLOUD_PROFILES: Array<CloudProfile> = [
+  { value: "custom", label: "Custom", cpuPrice: "", memoryPrice: "" },
+  { value: "gcp-n2-standard", label: "GCP\u2014n2-standard", cpuPrice: "0.048", memoryPrice: "0.006" },
+  { value: "gcp-e2-standard", label: "GCP\u2014e2-standard", cpuPrice: "0.034", memoryPrice: "0.0046" },
+  { value: "aws-m5-large", label: "AWS\u2014m5.large", cpuPrice: "0.048", memoryPrice: "0.006" },
+  { value: "aws-c5-large", label: "AWS\u2014c5.large", cpuPrice: "0.054", memoryPrice: "0.0054" },
+  { value: "azure-d2s-v3", label: "Azure\u2014D2s v3", cpuPrice: "0.048", memoryPrice: "0.006" },
+];
 
 const surfaceStyles = {
   backgroundColor: "#121A37",
@@ -49,8 +66,10 @@ type ConfigRowProps = {
 };
 
 type FlowRateConfigurationDraft = {
-  readonly isEnabled: boolean;
+  readonly cloudProfile: string;
   readonly cpuPricePerCoreHour: string;
+  readonly cpuRequestFallback: string;
+  readonly isEnabled: boolean;
   readonly memoryPricePerGibHour: string;
   readonly retentionDays: string;
 };
@@ -86,9 +105,11 @@ export const FlowRateConfigurationSection = () => {
   const updateConfigurationMutation = useUpdateFlowRateConfiguration();
 
   const defaultConfig: FlowRateConfigurationDraft = {
+    cloudProfile: "gcp-n2-standard",
+    cpuPricePerCoreHour: "0.048",
+    cpuRequestFallback: "1.0",
     isEnabled: true,
-    cpuPricePerCoreHour: "0.031611",
-    memoryPricePerGibHour: "0.004237",
+    memoryPricePerGibHour: "0.006",
     retentionDays: "7",
   };
   const [savedConfig, setSavedConfig] = useState(defaultConfig);
@@ -99,11 +120,18 @@ export const FlowRateConfigurationSection = () => {
       return;
     }
 
+    const cpu = (configurationQuery.data.cpu_price_per_core_hour ?? "").toString();
+    const mem = (configurationQuery.data.memory_price_per_gib_hour ?? "").toString();
+    const matchedProfile =
+      CLOUD_PROFILES.find((p) => p.cpuPrice === cpu && p.memoryPrice === mem && p.value !== "custom")?.value ??
+      "custom";
     const nextConfig: FlowRateConfigurationDraft = {
-      isEnabled: configurationQuery.data.enabled,
-      cpuPricePerCoreHour: configurationQuery.data.cpu_price_per_core_hour.toString(),
-      memoryPricePerGibHour: configurationQuery.data.memory_price_per_gib_hour.toString(),
-      retentionDays: configurationQuery.data.retention_days.toString(),
+      cloudProfile: matchedProfile,
+      cpuPricePerCoreHour: cpu,
+      cpuRequestFallback: "1.0",
+      isEnabled: configurationQuery.data.enabled ?? false,
+      memoryPricePerGibHour: mem,
+      retentionDays: (configurationQuery.data.retention_days ?? "").toString(),
     };
 
     setSavedConfig(nextConfig);
@@ -209,6 +237,7 @@ export const FlowRateConfigurationSection = () => {
         </Text>
       </Flex>
 
+      {/* Plugin Settings */}
       <Box {...surfaceStyles} overflow="hidden">
         <Box px={5} py={4}>
           <Text color="#CBD4F1" fontSize="md" fontWeight={700}>
@@ -219,16 +248,11 @@ export const FlowRateConfigurationSection = () => {
         <Box px={5}>
           <ConfigRow
             helper={translate("flowrate.enableFlowRateHelp", {
-              defaultValue: "Turn FlowRate collection on or off for this workspace experience.",
+              defaultValue: "When disabled, no metrics are collected. DAG execution is unaffected",
             })}
             label={translate("flowrate.enableFlowRate", { defaultValue: "Enable FlowRate" })}
           >
-            <HStack justify={{ base: "flex-start", md: "flex-end" }}>
-              <Text color={draftConfig.isEnabled ? "#5BD475" : "#95A1C4"} fontSize="sm" fontWeight={600}>
-                {translate(draftConfig.isEnabled ? "flowrate.enabled" : "flowrate.disabled", {
-                  defaultValue: draftConfig.isEnabled ? "Enabled" : "Disabled",
-                })}
-              </Text>
+            <HStack>
               <Switch
                 checked={draftConfig.isEnabled}
                 onCheckedChange={({ checked }) =>
@@ -236,92 +260,21 @@ export const FlowRateConfigurationSection = () => {
                 }
                 variant="raised"
               />
-            </HStack>
-          </ConfigRow>
-
-          <ConfigRow
-            helper={translate("flowrate.cpuPricingHelp", {
-              defaultValue: "Price applied to one full CPU core for one hour of runtime.",
-            })}
-            label={translate("flowrate.cpuPricing", { defaultValue: "CPU price per core-hour" })}
-          >
-            <HStack justify={{ base: "flex-start", md: "flex-end" }}>
-              <Input
-                backgroundColor="#0F1731"
-                borderColor="#2B3A6E"
-                color="#E6ECFF"
-                disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
-                maxW="160px"
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  if (!PRICE_DECIMAL_PATTERN.test(nextValue)) {
-                    return;
-                  }
-                  setDraftConfig((currentConfig) => ({
-                    ...currentConfig,
-                    cpuPricePerCoreHour: nextValue,
-                  }));
-                }}
-                size="sm"
-                textAlign="right"
-                type="text"
-                value={draftConfig.cpuPricePerCoreHour}
-              />
-            </HStack>
-            {!isCpuPriceValid ? (
-              <Text color="#FF7A45" fontSize="12px" mt={2} textAlign={{ base: "left", md: "right" }}>
-                {translate("flowrate.priceValidation", {
-                  defaultValue: "Enter a non-negative numeric price.",
-                })}
+              <Text color={draftConfig.isEnabled ? "#5BD475" : "#95A1C4"} fontSize="sm" fontWeight={600}>
+                {draftConfig.isEnabled
+                  ? translate("flowrate.enabled", { defaultValue: "Enabled" })
+                  : translate("flowrate.disabled", { defaultValue: "Disabled" })}
               </Text>
-            ) : undefined}
-          </ConfigRow>
-
-          <ConfigRow
-            helper={translate("flowrate.memoryPricingHelp", {
-              defaultValue: "Price applied to one GiB of memory for one hour of runtime.",
-            })}
-            label={translate("flowrate.memoryPricing", { defaultValue: "Memory price per GiB-hour" })}
-          >
-            <HStack justify={{ base: "flex-start", md: "flex-end" }}>
-              <Input
-                backgroundColor="#0F1731"
-                borderColor="#2B3A6E"
-                color="#E6ECFF"
-                disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
-                maxW="160px"
-                onChange={(event) => {
-                  const nextValue = event.target.value;
-                  if (!PRICE_DECIMAL_PATTERN.test(nextValue)) {
-                    return;
-                  }
-                  setDraftConfig((currentConfig) => ({
-                    ...currentConfig,
-                    memoryPricePerGibHour: nextValue,
-                  }));
-                }}
-                size="sm"
-                textAlign="right"
-                type="text"
-                value={draftConfig.memoryPricePerGibHour}
-              />
             </HStack>
-            {!isMemoryPriceValid ? (
-              <Text color="#FF7A45" fontSize="12px" mt={2} textAlign={{ base: "left", md: "right" }}>
-                {translate("flowrate.priceValidation", {
-                  defaultValue: "Enter a non-negative numeric price.",
-                })}
-              </Text>
-            ) : undefined}
           </ConfigRow>
 
           <ConfigRow
             helper={translate("flowrate.dataRetentionHelp", {
-              defaultValue: "Choose how many days of FlowRate task metrics to keep.",
+              defaultValue: "How long task metric records are kept before automatic cleanup.",
             })}
             label={translate("flowrate.dataRetention", { defaultValue: "Data retention" })}
           >
-            <HStack justify={{ base: "flex-start", md: "flex-end" }}>
+            <HStack>
               <Input
                 backgroundColor="#0F1731"
                 borderColor="#2B3A6E"
@@ -344,14 +297,224 @@ export const FlowRateConfigurationSection = () => {
               </Text>
             </HStack>
             {draftConfig.retentionDays !== "" && !isRetentionValid ? (
-              <Text color="#FF7A45" fontSize="12px" mt={2} textAlign={{ base: "left", md: "right" }}>
+              <Text color="#FF7A45" fontSize="12px" mt={2}>
                 {translate("flowrate.retentionValidation", {
                   defaultValue: "Enter a value between 1 and 365 days.",
                 })}
               </Text>
             ) : undefined}
           </ConfigRow>
+        </Box>
+      </Box>
 
+      {/* Pricing Parameters */}
+      <Box {...surfaceStyles} overflow="hidden">
+        <Box px={5} py={4}>
+          <Text color="#CBD4F1" fontSize="md" fontWeight={700}>
+            {translate("flowrate.pricingParameters", { defaultValue: "Pricing Parameters" })}
+          </Text>
+        </Box>
+
+        <Box px={5} pb={2}>
+          <HStack
+            backgroundColor="#2A1F0A"
+            borderColor="#6B4C0A"
+            borderRadius="6px"
+            borderWidth="1px"
+            gap={2}
+            mb={4}
+            px={4}
+            py={3}
+          >
+            <Box color="#E8A838" flexShrink={0}>
+              <TbAlertTriangle size={16} />
+            </Box>
+            <Text color="#E8A838" fontSize="sm">
+              {translate("flowrate.pricingDisclaimer", {
+                defaultValue:
+                  "These are request-based estimates allocated resources \u00d7 runtime, not actual billing.",
+              })}
+            </Text>
+          </HStack>
+
+          <ConfigRow
+            helper={translate("flowrate.cloudProfileHelp", {
+              defaultValue: "Pre-fills CPU and memory prices. You can override below",
+            })}
+            label={translate("flowrate.cloudProfile", { defaultValue: "Cloud profile" })}
+          >
+            <NativeSelect.Root
+              backgroundColor="#0F1731"
+              borderColor="#2B3A6E"
+              color="#E6ECFF"
+              disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
+              maxW="220px"
+              size="sm"
+            >
+              <NativeSelect.Field
+                onChange={(event) => {
+                  const profile = CLOUD_PROFILES.find((p) => p.value === event.currentTarget.value);
+                  if (!profile || profile.value === "custom") {
+                    setDraftConfig((c) => ({ ...c, cloudProfile: "custom" }));
+                  } else {
+                    setDraftConfig((c) => ({
+                      ...c,
+                      cloudProfile: profile.value,
+                      cpuPricePerCoreHour: profile.cpuPrice,
+                      memoryPricePerGibHour: profile.memoryPrice,
+                    }));
+                  }
+                }}
+                value={draftConfig.cloudProfile}
+              >
+                {CLOUD_PROFILES.map((p) => (
+                  <option key={p.value} value={p.value}>
+                    {p.label}
+                  </option>
+                ))}
+              </NativeSelect.Field>
+              <NativeSelect.Indicator />
+            </NativeSelect.Root>
+          </ConfigRow>
+
+          <ConfigRow
+            helper={translate("flowrate.cpuPricingHelp", {
+              defaultValue: "duration \u00d7 cpu_req \u00d7 cpu_price",
+            })}
+            label={translate("flowrate.cpuPricing", { defaultValue: "CPU price" })}
+          >
+            <HStack>
+              <HStack
+                backgroundColor="#0F1731"
+                borderColor={isCpuPriceValid ? "#2B3A6E" : "#FF7A45"}
+                borderRadius="md"
+                borderWidth="1px"
+                maxW="200px"
+                overflow="hidden"
+                px={2}
+              >
+                <Text color="#6F7895" fontSize="sm" flexShrink={0}>
+                  $
+                </Text>
+                <Input
+                  backgroundColor="transparent"
+                  border="none"
+                  color="#E6ECFF"
+                  disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    if (!PRICE_DECIMAL_PATTERN.test(nextValue)) {
+                      return;
+                    }
+                    setDraftConfig((c) => ({ ...c, cloudProfile: "custom", cpuPricePerCoreHour: nextValue }));
+                  }}
+                  p={0}
+                  size="sm"
+                  textAlign="right"
+                  type="text"
+                  value={draftConfig.cpuPricePerCoreHour}
+                />
+                <Text color="#6F7895" fontSize="sm" flexShrink={0} whiteSpace="nowrap">
+                  /vCPU-hr
+                </Text>
+              </HStack>
+            </HStack>
+            {!isCpuPriceValid ? (
+              <Text color="#FF7A45" fontSize="12px" mt={1}>
+                {translate("flowrate.priceValidation", { defaultValue: "Enter a non-negative numeric price." })}
+              </Text>
+            ) : undefined}
+          </ConfigRow>
+
+          <ConfigRow
+            helper={translate("flowrate.memoryPricingHelp", {
+              defaultValue: "duration \u00d7 mem_req_gb \u00d7 mem_price",
+            })}
+            label={translate("flowrate.memoryPricing", { defaultValue: "Memory price" })}
+          >
+            <HStack>
+              <HStack
+                backgroundColor="#0F1731"
+                borderColor={isMemoryPriceValid ? "#2B3A6E" : "#FF7A45"}
+                borderRadius="md"
+                borderWidth="1px"
+                maxW="200px"
+                overflow="hidden"
+                px={2}
+              >
+                <Text color="#6F7895" fontSize="sm" flexShrink={0}>
+                  $
+                </Text>
+                <Input
+                  backgroundColor="transparent"
+                  border="none"
+                  color="#E6ECFF"
+                  disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    if (!PRICE_DECIMAL_PATTERN.test(nextValue)) {
+                      return;
+                    }
+                    setDraftConfig((c) => ({ ...c, cloudProfile: "custom", memoryPricePerGibHour: nextValue }));
+                  }}
+                  p={0}
+                  size="sm"
+                  textAlign="right"
+                  type="text"
+                  value={draftConfig.memoryPricePerGibHour}
+                />
+                <Text color="#6F7895" fontSize="sm" flexShrink={0} whiteSpace="nowrap">
+                  / GB-hr
+                </Text>
+              </HStack>
+            </HStack>
+            {!isMemoryPriceValid ? (
+              <Text color="#FF7A45" fontSize="12px" mt={1}>
+                {translate("flowrate.priceValidation", { defaultValue: "Enter a non-negative numeric price." })}
+              </Text>
+            ) : undefined}
+          </ConfigRow>
+
+          <ConfigRow
+            helper={translate("flowrate.cpuFallbackHelp", {
+              defaultValue: "duration \u00d7 mem_req_gb \u00d7 mem_price",
+            })}
+            label={translate("flowrate.cpuFallback", { defaultValue: "Default CPU request fallback" })}
+          >
+            <HStack>
+              <HStack
+                backgroundColor="#0F1731"
+                borderColor="#2B3A6E"
+                borderRadius="md"
+                borderWidth="1px"
+                maxW="140px"
+                overflow="hidden"
+                px={2}
+              >
+                <Input
+                  backgroundColor="transparent"
+                  border="none"
+                  color="#E6ECFF"
+                  disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    if (!PRICE_DECIMAL_PATTERN.test(nextValue)) {
+                      return;
+                    }
+                    setDraftConfig((c) => ({ ...c, cpuRequestFallback: nextValue }));
+                  }}
+                  p={0}
+                  size="sm"
+                  textAlign="right"
+                  type="text"
+                  value={draftConfig.cpuRequestFallback}
+                />
+                <Text color="#6F7895" fontSize="sm" flexShrink={0}>
+                  VCPU
+                </Text>
+              </HStack>
+            </HStack>
+          </ConfigRow>
         </Box>
       </Box>
     </VStack>
