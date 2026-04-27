@@ -24,6 +24,8 @@ import { OpenAPI } from "openapi/requests/core/OpenAPI";
 export type FlowRateConfiguration = {
   readonly enabled: boolean;
   readonly retention_days: number;
+  readonly cpu_price_per_core_hour: number;
+  readonly memory_price_per_gib_hour: number;
 };
 
 const getFlowRateConfiguration = async (): Promise<FlowRateConfiguration> => {

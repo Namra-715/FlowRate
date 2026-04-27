@@ -24,7 +24,7 @@ from fastapi import Depends, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql.expression import case, false
 
-from airflow._shared.timezones import timezone
+from airflow._shared.timezones import timezone  # type: ignore
 from airflow.configuration import conf
 from airflow.api_fastapi.auth.managers.models.resource_details import DagAccessEntity
 from airflow.api_fastapi.common.db.common import SessionDep
@@ -80,10 +80,13 @@ def _default_flowrate_configuration() -> FlowRateConfiguration:
         enabled = conf.getboolean("flowrate", "enabled")
     except Exception:
         enabled = False
+    pricing = get_pricing()
 
     return FlowRateConfiguration(
         enabled=enabled,
         retention_days=FLOWRATE_RETENTION_DAYS_DEFAULT,
+        cpu_price_per_core_hour=pricing.cpu_price_per_core_hour,
+        memory_price_per_gib_hour=pricing.memory_price_per_gib_hour,
     )
 
 
@@ -113,6 +116,15 @@ def _sanitize_retention_days(value: Any, fallback: int) -> int:
     return min(max(parsed, FLOWRATE_RETENTION_DAYS_MIN), FLOWRATE_RETENTION_DAYS_MAX)
 
 
+def _sanitize_non_negative_float(value: Any, fallback: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+    return max(parsed, 0.0)
+
+
 def _sanitize_flowrate_configuration(raw_value: Any) -> FlowRateConfiguration:
     defaults = _default_flowrate_configuration()
 
@@ -122,6 +134,12 @@ def _sanitize_flowrate_configuration(raw_value: Any) -> FlowRateConfiguration:
     return FlowRateConfiguration(
         enabled=_parse_bool(raw_value.get("enabled"), defaults.enabled),
         retention_days=_sanitize_retention_days(raw_value.get("retention_days"), defaults.retention_days),
+        cpu_price_per_core_hour=_sanitize_non_negative_float(
+            raw_value.get("cpu_price_per_core_hour"), defaults.cpu_price_per_core_hour
+        ),
+        memory_price_per_gib_hour=_sanitize_non_negative_float(
+            raw_value.get("memory_price_per_gib_hour"), defaults.memory_price_per_gib_hour
+        ),
     )
 
 
@@ -387,12 +405,13 @@ def flowrate_trends(
 ) -> FlowRateTrendsResponse:
     """Return FlowRate trends data for top DAG and task visualizations."""
     flowrate_configuration = _load_flowrate_configuration()
-    pricing = get_pricing()
+    cpu_price_per_core_hour = flowrate_configuration.cpu_price_per_core_hour
+    memory_price_per_gib_hour = flowrate_configuration.memory_price_per_gib_hour
     if not flowrate_configuration.enabled:
         return FlowRateTrendsResponse(
             pricing=FlowRateTrendsPricing(
-                cpu_price_per_core_hour=round(float(pricing.cpu_price_per_core_hour), 6),
-                memory_price_per_gib_hour=round(float(pricing.memory_price_per_gib_hour), 6),
+                cpu_price_per_core_hour=round(float(cpu_price_per_core_hour), 6),
+                memory_price_per_gib_hour=round(float(memory_price_per_gib_hour), 6),
             ),
             resource_split=FlowRateTrendsResourceSplit(
                 cpu_cost=0.0,
@@ -526,9 +545,9 @@ def flowrate_trends(
     for row in resource_rows:
         duration_hours = _duration_seconds(row.start_date, row.end_date) / 3600.0
         if row.cpu_seconds:
-            cpu_cost += (float(row.cpu_seconds) / 3600.0) * pricing.cpu_price_per_core_hour
+            cpu_cost += (float(row.cpu_seconds) / 3600.0) * cpu_price_per_core_hour
         if row.max_rss_mb and duration_hours > 0:
-            memory_cost += (float(row.max_rss_mb) / 1024.0) * duration_hours * pricing.memory_price_per_gib_hour
+            memory_cost += (float(row.max_rss_mb) / 1024.0) * duration_hours * memory_price_per_gib_hour
 
     total_resource_cost = cpu_cost + memory_cost
     cpu_percentage = (cpu_cost / total_resource_cost * 100.0) if total_resource_cost else 0.0
@@ -536,8 +555,8 @@ def flowrate_trends(
 
     return FlowRateTrendsResponse(
         pricing=FlowRateTrendsPricing(
-            cpu_price_per_core_hour=round(float(pricing.cpu_price_per_core_hour), 6),
-            memory_price_per_gib_hour=round(float(pricing.memory_price_per_gib_hour), 6),
+            cpu_price_per_core_hour=round(float(cpu_price_per_core_hour), 6),
+            memory_price_per_gib_hour=round(float(memory_price_per_gib_hour), 6),
         ),
         resource_split=FlowRateTrendsResourceSplit(
             cpu_cost=round(float(cpu_cost), 2),

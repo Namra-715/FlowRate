@@ -50,11 +50,14 @@ type ConfigRowProps = {
 
 type FlowRateConfigurationDraft = {
   readonly isEnabled: boolean;
+  readonly cpuPricePerCoreHour: string;
+  readonly memoryPricePerGibHour: string;
   readonly retentionDays: string;
 };
 
 const RETENTION_DAYS_MIN = 1;
 const RETENTION_DAYS_MAX = 365;
+const PRICE_DECIMAL_PATTERN = /^(\d+)?(\.\d*)?$/u;
 
 const ConfigRow = ({ children, helper, label }: ConfigRowProps) => (
   <Grid
@@ -84,6 +87,8 @@ export const FlowRateConfigurationSection = () => {
 
   const defaultConfig: FlowRateConfigurationDraft = {
     isEnabled: true,
+    cpuPricePerCoreHour: "0.031611",
+    memoryPricePerGibHour: "0.004237",
     retentionDays: "7",
   };
   const [savedConfig, setSavedConfig] = useState(defaultConfig);
@@ -96,6 +101,8 @@ export const FlowRateConfigurationSection = () => {
 
     const nextConfig: FlowRateConfigurationDraft = {
       isEnabled: configurationQuery.data.enabled,
+      cpuPricePerCoreHour: configurationQuery.data.cpu_price_per_core_hour.toString(),
+      memoryPricePerGibHour: configurationQuery.data.memory_price_per_gib_hour.toString(),
       retentionDays: configurationQuery.data.retention_days.toString(),
     };
 
@@ -104,23 +111,37 @@ export const FlowRateConfigurationSection = () => {
   }, [configurationQuery.data]);
 
   const parsedRetentionDays = Number.parseInt(draftConfig.retentionDays, 10);
+  const parsedCpuPricePerCoreHour = Number.parseFloat(draftConfig.cpuPricePerCoreHour);
+  const parsedMemoryPricePerGibHour = Number.parseFloat(draftConfig.memoryPricePerGibHour);
   const isRetentionValid =
     Number.isInteger(parsedRetentionDays) &&
     parsedRetentionDays >= RETENTION_DAYS_MIN &&
     parsedRetentionDays <= RETENTION_DAYS_MAX;
+  const isCpuPriceValid =
+    draftConfig.cpuPricePerCoreHour !== "" &&
+    Number.isFinite(parsedCpuPricePerCoreHour) &&
+    parsedCpuPricePerCoreHour >= 0;
+  const isMemoryPriceValid =
+    draftConfig.memoryPricePerGibHour !== "" &&
+    Number.isFinite(parsedMemoryPricePerGibHour) &&
+    parsedMemoryPricePerGibHour >= 0;
 
   const saveConfiguration = async () => {
-    if (!isRetentionValid) {
+    if (!isRetentionValid || !isCpuPriceValid || !isMemoryPriceValid) {
       return;
     }
 
     const payload: FlowRateConfiguration = {
       enabled: draftConfig.isEnabled,
+      cpu_price_per_core_hour: parsedCpuPricePerCoreHour,
+      memory_price_per_gib_hour: parsedMemoryPricePerGibHour,
       retention_days: parsedRetentionDays,
     };
     const updatedConfiguration = await updateConfigurationMutation.mutateAsync(payload);
     const nextSavedConfig: FlowRateConfigurationDraft = {
       isEnabled: updatedConfiguration.enabled,
+      cpuPricePerCoreHour: updatedConfiguration.cpu_price_per_core_hour.toString(),
+      memoryPricePerGibHour: updatedConfiguration.memory_price_per_gib_hour.toString(),
       retentionDays: updatedConfiguration.retention_days.toString(),
     };
     setSavedConfig(nextSavedConfig);
@@ -128,7 +149,10 @@ export const FlowRateConfigurationSection = () => {
   };
 
   const hasChanges =
-    draftConfig.isEnabled !== savedConfig.isEnabled || draftConfig.retentionDays !== savedConfig.retentionDays;
+    draftConfig.isEnabled !== savedConfig.isEnabled ||
+    draftConfig.cpuPricePerCoreHour !== savedConfig.cpuPricePerCoreHour ||
+    draftConfig.memoryPricePerGibHour !== savedConfig.memoryPricePerGibHour ||
+    draftConfig.retentionDays !== savedConfig.retentionDays;
 
   return (
     <VStack align="stretch" gap={4} mt={4}>
@@ -157,7 +181,12 @@ export const FlowRateConfigurationSection = () => {
             backgroundColor="#4F7BFF"
             color="#F7FAFF"
             disabled={
-              configurationQuery.isLoading || updateConfigurationMutation.isPending || !hasChanges || !isRetentionValid
+              configurationQuery.isLoading ||
+              updateConfigurationMutation.isPending ||
+              !hasChanges ||
+              !isRetentionValid ||
+              !isCpuPriceValid ||
+              !isMemoryPriceValid
             }
             loading={updateConfigurationMutation.isPending}
             onClick={() => void saveConfiguration()}
@@ -175,7 +204,7 @@ export const FlowRateConfigurationSection = () => {
         <Text color="#9DB8FF" fontSize="sm">
           {translate("flowrate.configurationSource", {
             defaultValue:
-              "Plugin settings reflect the current FlowRate experience in this workspace. Sensitive Airflow config remains hidden from the UI.",
+              "Plugin settings reflect the current FlowRate experience in this workspace, including the pricing used for cost estimates.",
           })}
         </Text>
       </Flex>
@@ -208,6 +237,82 @@ export const FlowRateConfigurationSection = () => {
                 variant="raised"
               />
             </HStack>
+          </ConfigRow>
+
+          <ConfigRow
+            helper={translate("flowrate.cpuPricingHelp", {
+              defaultValue: "Price applied to one full CPU core for one hour of runtime.",
+            })}
+            label={translate("flowrate.cpuPricing", { defaultValue: "CPU price per core-hour" })}
+          >
+            <HStack justify={{ base: "flex-start", md: "flex-end" }}>
+              <Input
+                backgroundColor="#0F1731"
+                borderColor="#2B3A6E"
+                color="#E6ECFF"
+                disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
+                maxW="160px"
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  if (!PRICE_DECIMAL_PATTERN.test(nextValue)) {
+                    return;
+                  }
+                  setDraftConfig((currentConfig) => ({
+                    ...currentConfig,
+                    cpuPricePerCoreHour: nextValue,
+                  }));
+                }}
+                size="sm"
+                textAlign="right"
+                type="text"
+                value={draftConfig.cpuPricePerCoreHour}
+              />
+            </HStack>
+            {!isCpuPriceValid ? (
+              <Text color="#FF7A45" fontSize="12px" mt={2} textAlign={{ base: "left", md: "right" }}>
+                {translate("flowrate.priceValidation", {
+                  defaultValue: "Enter a non-negative numeric price.",
+                })}
+              </Text>
+            ) : undefined}
+          </ConfigRow>
+
+          <ConfigRow
+            helper={translate("flowrate.memoryPricingHelp", {
+              defaultValue: "Price applied to one GiB of memory for one hour of runtime.",
+            })}
+            label={translate("flowrate.memoryPricing", { defaultValue: "Memory price per GiB-hour" })}
+          >
+            <HStack justify={{ base: "flex-start", md: "flex-end" }}>
+              <Input
+                backgroundColor="#0F1731"
+                borderColor="#2B3A6E"
+                color="#E6ECFF"
+                disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
+                maxW="160px"
+                onChange={(event) => {
+                  const nextValue = event.target.value;
+                  if (!PRICE_DECIMAL_PATTERN.test(nextValue)) {
+                    return;
+                  }
+                  setDraftConfig((currentConfig) => ({
+                    ...currentConfig,
+                    memoryPricePerGibHour: nextValue,
+                  }));
+                }}
+                size="sm"
+                textAlign="right"
+                type="text"
+                value={draftConfig.memoryPricePerGibHour}
+              />
+            </HStack>
+            {!isMemoryPriceValid ? (
+              <Text color="#FF7A45" fontSize="12px" mt={2} textAlign={{ base: "left", md: "right" }}>
+                {translate("flowrate.priceValidation", {
+                  defaultValue: "Enter a non-negative numeric price.",
+                })}
+              </Text>
+            ) : undefined}
           </ConfigRow>
 
           <ConfigRow

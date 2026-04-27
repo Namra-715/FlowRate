@@ -50,7 +50,7 @@ def _safe_float(section: str, key: str, fallback: float) -> float:
 
 
 def get_pricing() -> FlowRatePricing:
-    # Load FlowRate pricing config, using hardcoded defaults for now
+    # Load FlowRate pricing config from airflow.cfg.
     return FlowRatePricing(
         cpu_price_per_core_hour=_safe_float("flowrate", "cpu_price_per_core_hour", 0.031611),
         memory_price_per_gib_hour=_safe_float("flowrate", "memory_price_per_gib_hour", 0.004237),

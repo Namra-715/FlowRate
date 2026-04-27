@@ -29,7 +29,7 @@ import { Stat } from "src/components/Stat";
 import { TogglePause } from "src/components/TogglePause";
 import { TriggerDAGButton } from "src/components/TriggerDag/TriggerDAGButton";
 import { Tooltip } from "src/components/ui";
-import { isStatePending, useAutoRefresh } from "src/utils";
+import { formatFlowRateCost, formatMinutesSeconds, isStatePending, useAutoRefresh } from "src/utils";
 
 import { DagTags } from "./DagTags";
 import { RecentRuns } from "./RecentRuns";
@@ -111,12 +111,10 @@ export const DagCard = ({ dag }: Props) => {
           {dag.number_of_runs ?? "—"}
         </Stat>
         <Stat data-testid="avg-duration" label="Avg Duration">
-          {dag.avg_duration != null
-            ? `${Math.floor(dag.avg_duration / 60)}m ${String(Math.round(dag.avg_duration % 60)).padStart(2, "0")}s`
-            : "—"}
+          {formatMinutesSeconds(dag.avg_duration)}
         </Stat>
         <Stat data-testid="estimated-cost" label="Est. Cost">
-          {dag.estimated_cost != null ? `$${dag.estimated_cost.toFixed(2)}` : "—"}
+          {formatFlowRateCost(dag.estimated_cost)}
         </Stat>
         <RecentRuns latestRuns={dag.latest_dag_runs} />
       </SimpleGrid>
