@@ -33,8 +33,13 @@ from airflow.api_fastapi.common.router import AirflowRouter
 from airflow.api_fastapi.core_api.datamodels.ui.dashboard import (
     DashboardDagStatsResponse,
     FlowRateConfiguration,
+    FlowRateSummaryResourceSplit,
     FlowRateSummaryResponse,
+    FlowRateTrendsDagCostRow,
+    FlowRateTrendsPricing,
+    FlowRateTrendsResourceSplit,
     FlowRateTrendsResponse,
+    FlowRateTrendsTaskCostRow,
     HistoricalMetricDataResponse,
 )
 from airflow.api_fastapi.core_api.openapi.exceptions import create_openapi_http_exception_doc
@@ -42,6 +47,7 @@ from airflow.api_fastapi.core_api.security import ReadableDagsFilterDep, require
 from airflow.models.dag import DagModel
 from airflow.models.dagrun import DagRun, DagRunType
 from airflow.models.flowrate_metric import FlowRateMetric
+from airflow.models.taskinstance import TaskInstance
 from airflow.models.variable import Variable
 from airflow.plugins.flowrate.cost_engine import get_pricing
 from airflow.utils.state import DagRunState, TaskInstanceState
@@ -315,10 +321,10 @@ def flowrate_summary(
             total_estimated_cost=0.0,
             tasks_tracked=0,
             average_cost_per_dag_run=0.0,
-            resource_split={
-                "cpu_percentage": 0.0,
-                "memory_percentage": 0.0,
-            },
+            resource_split=FlowRateSummaryResourceSplit(
+                cpu_percentage=0.0,
+                memory_percentage=0.0,
+            ),
         )
 
     current_time = timezone.utcnow()
@@ -362,10 +368,10 @@ def flowrate_summary(
         total_estimated_cost=round(float(summary.total_estimated_cost), 2),
         tasks_tracked=summary.tasks_tracked,
         average_cost_per_dag_run=round(float(average_cost_per_dag_run), 2),
-        resource_split={
-            "cpu_percentage": round(float(cpu_percentage), 1),
-            "memory_percentage": round(float(memory_percentage), 1),
-        },
+        resource_split=FlowRateSummaryResourceSplit(
+            cpu_percentage=round(float(cpu_percentage), 1),
+            memory_percentage=round(float(memory_percentage), 1),
+        ),
     )
 
 
@@ -384,16 +390,16 @@ def flowrate_trends(
     pricing = get_pricing()
     if not flowrate_configuration.enabled:
         return FlowRateTrendsResponse(
-            pricing={
-                "cpu_price_per_core_hour": round(float(pricing.cpu_price_per_core_hour), 6),
-                "memory_price_per_gib_hour": round(float(pricing.memory_price_per_gib_hour), 6),
-            },
-            resource_split={
-                "cpu_cost": 0.0,
-                "memory_cost": 0.0,
-                "cpu_percentage": 0.0,
-                "memory_percentage": 0.0,
-            },
+            pricing=FlowRateTrendsPricing(
+                cpu_price_per_core_hour=round(float(pricing.cpu_price_per_core_hour), 6),
+                memory_price_per_gib_hour=round(float(pricing.memory_price_per_gib_hour), 6),
+            ),
+            resource_split=FlowRateTrendsResourceSplit(
+                cpu_cost=0.0,
+                memory_cost=0.0,
+                cpu_percentage=0.0,
+                memory_percentage=0.0,
+            ),
             top_dags=[],
             top_tasks=[],
         )
@@ -447,13 +453,13 @@ def flowrate_trends(
         )
 
     top_dags = [
-        {
-            "dag_id": row.dag_id,
-            "runs": int(row.run_count),
-            "avg_duration_seconds": round(float(_average(duration_by_dag[row.dag_id])), 2),
-            "status": "running" if row.dag_id in running_dags else "success",
-            "estimated_cost": round(float(row.total_cost), 2),
-        }
+        FlowRateTrendsDagCostRow(
+            dag_id=row.dag_id,
+            runs=int(row.run_count),
+            avg_duration_seconds=round(float(_average(duration_by_dag[row.dag_id])), 2),
+            status="running" if row.dag_id in running_dags else "success",
+            estimated_cost=round(float(row.total_cost), 2),
+        )
         for row in top_dag_totals
     ]
 
@@ -494,15 +500,15 @@ def flowrate_trends(
             duration_by_task[(row.dag_id, row.task_id)].append(_duration_seconds(row.start_date, row.end_date))
 
     top_tasks = [
-        {
-            "task_id": row.task_id,
-            "dag_id": row.dag_id,
-            "operator": None,
-            "avg_duration_seconds": round(float(_average(duration_by_task[(row.dag_id, row.task_id)])), 2),
-            "avg_cpu_seconds": round(float(row.avg_cpu_seconds), 2),
-            "avg_max_rss_mb": round(float(row.avg_max_rss_mb), 2),
-            "avg_cost_per_run": round(float(row.total_cost) / row.run_count, 2) if row.run_count else 0.0,
-        }
+        FlowRateTrendsTaskCostRow(
+            task_id=row.task_id,
+            dag_id=row.dag_id,
+            operator=None,
+            avg_duration_seconds=round(float(_average(duration_by_task[(row.dag_id, row.task_id)])), 2),
+            avg_cpu_seconds=round(float(row.avg_cpu_seconds), 2),
+            avg_max_rss_mb=round(float(row.avg_max_rss_mb), 2),
+            avg_cost_per_run=round(float(row.total_cost) / row.run_count, 2) if row.run_count else 0.0,
+        )
         for row in top_task_totals
     ]
 
@@ -529,16 +535,16 @@ def flowrate_trends(
     memory_percentage = 100.0 - cpu_percentage if total_resource_cost else 0.0
 
     return FlowRateTrendsResponse(
-        pricing={
-            "cpu_price_per_core_hour": round(float(pricing.cpu_price_per_core_hour), 6),
-            "memory_price_per_gib_hour": round(float(pricing.memory_price_per_gib_hour), 6),
-        },
-        resource_split={
-            "cpu_cost": round(float(cpu_cost), 2),
-            "memory_cost": round(float(memory_cost), 2),
-            "cpu_percentage": round(float(cpu_percentage), 1),
-            "memory_percentage": round(float(memory_percentage), 1),
-        },
+        pricing=FlowRateTrendsPricing(
+            cpu_price_per_core_hour=round(float(pricing.cpu_price_per_core_hour), 6),
+            memory_price_per_gib_hour=round(float(pricing.memory_price_per_gib_hour), 6),
+        ),
+        resource_split=FlowRateTrendsResourceSplit(
+            cpu_cost=round(float(cpu_cost), 2),
+            memory_cost=round(float(memory_cost), 2),
+            cpu_percentage=round(float(cpu_percentage), 1),
+            memory_percentage=round(float(memory_percentage), 1),
+        ),
         top_dags=top_dags,
         top_tasks=top_tasks,
     )
