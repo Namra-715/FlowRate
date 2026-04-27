@@ -29,7 +29,7 @@ import certifi
 import httpx
 import msgspec
 import structlog
-from pydantic import BaseModel
+from pydantic import BaseModel, JsonValue
 from tenacity import (
     before_log,
     retry,
@@ -218,13 +218,34 @@ class TaskInstanceOperations:
         resp = self.client.patch(f"task-instances/{id}/run", content=body.model_dump_json())
         return TIRunContext.model_validate_json(resp.read())
 
-    def finish(self, id: uuid.UUID, state: TerminalStateNonSuccess, when: datetime, rendered_map_index):
+    def finish(
+        self,
+        id: uuid.UUID,
+        state: TerminalStateNonSuccess,
+        when: datetime,
+        rendered_map_index,
+        *,
+        cpu_seconds: float | None = None,
+        max_rss_mb: float | None = None,
+        execution_platform: str | None = None,
+        avg_cpu_cores: float | None = None,
+        read_bytes: int | None = None,
+        write_bytes: int | None = None,
+    ):
         """Tell the API server that this TI has reached a terminal state."""
         if state == TaskInstanceState.SUCCESS:
             raise ValueError("Logic error. SUCCESS state should call the `succeed` function instead")
         # TODO: handle the naming better. finish sounds wrong as "even" deferred is essentially finishing.
         body = TITerminalStatePayload(
-            end_date=when, state=TerminalStateNonSuccess(state), rendered_map_index=rendered_map_index
+            end_date=when,
+            state=TerminalStateNonSuccess(state),
+            rendered_map_index=rendered_map_index,
+            cpu_seconds=cpu_seconds,
+            max_rss_mb=max_rss_mb,
+            execution_platform=execution_platform,
+            avg_cpu_cores=avg_cpu_cores,
+            read_bytes=read_bytes,
+            write_bytes=write_bytes,
         )
         self.client.patch(f"task-instances/{id}/state", content=body.model_dump_json())
 
@@ -307,7 +328,7 @@ class TaskInstanceOperations:
         body = TISkippedDownstreamTasksStatePayload(tasks=msg.tasks)
         self.client.patch(f"task-instances/{id}/skip-downstream", content=body.model_dump_json())
 
-    def set_rtif(self, id: uuid.UUID, body: dict[str, str]) -> OKResponse:
+    def set_rtif(self, id: uuid.UUID, body: dict[str, JsonValue]) -> OKResponse:
         """Set Rendered Task Instance Fields via the API server."""
         self.client.put(f"task-instances/{id}/rtif", json=body)
         # Any error from the server will anyway be propagated down to the supervisor,
