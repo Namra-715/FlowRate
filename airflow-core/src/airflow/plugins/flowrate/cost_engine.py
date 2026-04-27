@@ -63,12 +63,12 @@ def estimate_cost_from_usage_metrics(
     max_rss_mb: float | None,
     duration_seconds: float,
     pricing: FlowRatePricing | None = None,
-) -> float | None:
+) -> float:
     # Estimates cost from observed local task usage metrics.
     if duration_seconds <= 0:
         return 0.0
     if cpu_seconds is None and max_rss_mb is None:
-        return None
+        return 0.0
     effective_pricing = pricing or get_pricing()
     hours = duration_seconds / 3600.0
     cpu_cost = 0.0
@@ -99,10 +99,6 @@ def persist_estimated_ti_cost(ti: TaskInstance, *, end_date: datetime | None = N
         duration_seconds=duration_seconds,
         pricing=pricing,
     )
-
-    # Local executor: avoid a DB row per task when there is no measurable cost.
-    if estimated_cost is None:
-        return
 
     save_task_metric(
         dag_id=ti.dag_id,

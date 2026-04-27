@@ -28,14 +28,16 @@ import { useConfig } from "src/queries/useConfig";
 
 import { ReactPlugin } from "../ReactPlugin";
 import { FavoriteDags } from "./FavoriteDags";
+import { FlowRateConfigurationSection } from "./FlowRateConfigurationSection";
+import { FlowRateTrendsBottomSection } from "./FlowRateTrendsBottomSection";
 import { Health } from "./Health";
 import { HistoricalMetrics } from "./HistoricalMetrics";
-import { MetricSummary, type Tab } from "./MetricSummary";
+import { MetricSummary, type FlowRateTab } from "./MetricSummary";
 import { PoolSummary } from "./PoolSummary";
 import { Stats } from "./Stats";
 
 export const Dashboard = () => {
-  const [activeTab, setActiveTab] = useState<Tab>("Dashboard");
+  const [activeFlowRateTab, setActiveFlowRateTab] = useState<FlowRateTab>("dashboard");
   const alerts = useConfig("dashboard_alert") as Array<UIAlert>;
   const { t: translate } = useTranslation("dashboard");
   const instanceName = useConfig("instance_name");
@@ -79,9 +81,9 @@ export const Dashboard = () => {
             : translate("welcome")}
         </Heading>
         <Box order={3}>
-          <MetricSummary activeTab={activeTab} onTabChange={setActiveTab} />
+          <MetricSummary activeTab={activeFlowRateTab} onTabChange={setActiveFlowRateTab} />
         </Box>
-        {activeTab === "Dashboard" && (
+        {activeFlowRateTab === "dashboard" ? (
           <>
             <Box order={4}>
               <Stats />
@@ -96,11 +98,21 @@ export const Dashboard = () => {
             <Box order={7}>
               <HistoricalMetrics />
             </Box>
+            {dashboardReactPlugins.map((plugin) => (
+              <ReactPlugin key={plugin.name} reactApp={plugin} />
+            ))}
           </>
-        )}
-        {dashboardReactPlugins.map((plugin) => (
-          <ReactPlugin key={plugin.name} reactApp={plugin} />
-        ))}
+        ) : null}
+        {activeFlowRateTab === "trends" ? (
+          <Box order={4}>
+            <FlowRateTrendsBottomSection />
+          </Box>
+        ) : null}
+        {activeFlowRateTab === "configuration" ? (
+          <Box order={4}>
+            <FlowRateConfigurationSection />
+          </Box>
+        ) : null}
       </VStack>
     </Box>
   );
