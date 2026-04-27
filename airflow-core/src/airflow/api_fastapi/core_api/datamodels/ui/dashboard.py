@@ -140,3 +140,5 @@ class FlowRateConfiguration(BaseModel):
 
     enabled: bool
     retention_days: int
+    cpu_price_per_core_hour: float
+    memory_price_per_gib_hour: float

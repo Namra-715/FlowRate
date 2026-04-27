@@ -17,12 +17,29 @@
  * under the License.
  */
 
-export { capitalize } from "./capitalize";
-export { getDuration, renderDuration } from "./datetimeUtils";
-export { formatBytes } from "./formatBytes";
-export { formatFlowRateCost, formatMinutesSeconds } from "./flowrate";
-export { getMetaKey } from "./getMetaKey";
-export { useContainerWidth } from "./useContainerWidth";
-export { useFiltersHandler, type FilterableSearchParamsKeys } from "./useFiltersHandler";
-export * from "./query";
-export { STATE_PRIORITY, sortStateEntries } from "./stateUtils";
+export const formatFlowRateCost = (cost: number | null | undefined): string => {
+  if (cost === null || cost === undefined) {
+    return "—";
+  }
+
+  if (cost === 0) {
+    return "$0.00";
+  }
+
+  if (Math.abs(cost) < 0.01) {
+    return `$${cost.toFixed(6)}`;
+  }
+
+  return `$${cost.toFixed(2)}`;
+};
+
+export const formatMinutesSeconds = (durationSeconds: number | null | undefined): string => {
+  if (durationSeconds === null || durationSeconds === undefined) {
+    return "—";
+  }
+
+  const minutes = Math.floor(durationSeconds / 60);
+  const seconds = Math.round(durationSeconds % 60);
+
+  return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
+};

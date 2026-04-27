@@ -49,6 +49,7 @@ import { SearchParamsKeys, type SearchParamsKeysType } from "src/constants/searc
 import { DagsLayout } from "src/layouts/DagsLayout";
 import { useConfig } from "src/queries/useConfig";
 import { useDags } from "src/queries/useDags";
+import { formatFlowRateCost, formatMinutesSeconds } from "src/utils";
 
 import { DAGImportErrors } from "../Dashboard/Stats/DAGImportErrors";
 import { DagCard } from "./DagCard";
@@ -145,20 +146,13 @@ const createColumns = (
   },
   {
     accessorKey: "avg_duration",
-    cell: ({ row: { original } }) => {
-      const secs = original.avg_duration;
-      if (secs == null) return "—";
-      const m = Math.floor(secs / 60);
-      const s = Math.round(secs % 60);
-      return `${m}m ${s.toString().padStart(2, "0")}s`;
-    },
+    cell: ({ row: { original } }) => formatMinutesSeconds(original.avg_duration),
     enableSorting: false,
     header: "Average Duration",
   },
   {
     accessorKey: "estimated_cost",
-    cell: ({ row: { original } }) =>
-      original.estimated_cost != null ? `$${original.estimated_cost.toFixed(2)}` : "—",
+    cell: ({ row: { original } }) => formatFlowRateCost(original.estimated_cost),
     enableSorting: false,
     header: "Estimated Cost",
   },

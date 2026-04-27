@@ -80,10 +80,13 @@ def _default_flowrate_configuration() -> FlowRateConfiguration:
         enabled = conf.getboolean("flowrate", "enabled")
     except Exception:
         enabled = False
+    pricing = get_pricing()
 
     return FlowRateConfiguration(
         enabled=enabled,
         retention_days=FLOWRATE_RETENTION_DAYS_DEFAULT,
+        cpu_price_per_core_hour=pricing.cpu_price_per_core_hour,
+        memory_price_per_gib_hour=pricing.memory_price_per_gib_hour,
     )
 
 
@@ -113,6 +116,15 @@ def _sanitize_retention_days(value: Any, fallback: int) -> int:
     return min(max(parsed, FLOWRATE_RETENTION_DAYS_MIN), FLOWRATE_RETENTION_DAYS_MAX)
 
 
+def _sanitize_non_negative_float(value: Any, fallback: float) -> float:
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError):
+        return fallback
+
+    return max(parsed, 0.0)
+
+
 def _sanitize_flowrate_configuration(raw_value: Any) -> FlowRateConfiguration:
     defaults = _default_flowrate_configuration()
 
@@ -122,6 +134,12 @@ def _sanitize_flowrate_configuration(raw_value: Any) -> FlowRateConfiguration:
     return FlowRateConfiguration(
         enabled=_parse_bool(raw_value.get("enabled"), defaults.enabled),
         retention_days=_sanitize_retention_days(raw_value.get("retention_days"), defaults.retention_days),
+        cpu_price_per_core_hour=_sanitize_non_negative_float(
+            raw_value.get("cpu_price_per_core_hour"), defaults.cpu_price_per_core_hour
+        ),
+        memory_price_per_gib_hour=_sanitize_non_negative_float(
+            raw_value.get("memory_price_per_gib_hour"), defaults.memory_price_per_gib_hour
+        ),
     )
 
 
