@@ -24,7 +24,7 @@ from fastapi import Depends, status
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.sql.expression import case, false
 
-from airflow._shared.timezones import timezone
+from airflow._shared.timezones import timezone  # type: ignore
 from airflow.configuration import conf
 from airflow.api_fastapi.auth.managers.models.resource_details import DagAccessEntity
 from airflow.api_fastapi.common.db.common import SessionDep
@@ -405,12 +405,13 @@ def flowrate_trends(
 ) -> FlowRateTrendsResponse:
     """Return FlowRate trends data for top DAG and task visualizations."""
     flowrate_configuration = _load_flowrate_configuration()
-    pricing = get_pricing()
+    cpu_price_per_core_hour = flowrate_configuration.cpu_price_per_core_hour
+    memory_price_per_gib_hour = flowrate_configuration.memory_price_per_gib_hour
     if not flowrate_configuration.enabled:
         return FlowRateTrendsResponse(
             pricing=FlowRateTrendsPricing(
-                cpu_price_per_core_hour=round(float(pricing.cpu_price_per_core_hour), 6),
-                memory_price_per_gib_hour=round(float(pricing.memory_price_per_gib_hour), 6),
+                cpu_price_per_core_hour=round(float(cpu_price_per_core_hour), 6),
+                memory_price_per_gib_hour=round(float(memory_price_per_gib_hour), 6),
             ),
             resource_split=FlowRateTrendsResourceSplit(
                 cpu_cost=0.0,
@@ -544,9 +545,9 @@ def flowrate_trends(
     for row in resource_rows:
         duration_hours = _duration_seconds(row.start_date, row.end_date) / 3600.0
         if row.cpu_seconds:
-            cpu_cost += (float(row.cpu_seconds) / 3600.0) * pricing.cpu_price_per_core_hour
+            cpu_cost += (float(row.cpu_seconds) / 3600.0) * cpu_price_per_core_hour
         if row.max_rss_mb and duration_hours > 0:
-            memory_cost += (float(row.max_rss_mb) / 1024.0) * duration_hours * pricing.memory_price_per_gib_hour
+            memory_cost += (float(row.max_rss_mb) / 1024.0) * duration_hours * memory_price_per_gib_hour
 
     total_resource_cost = cpu_cost + memory_cost
     cpu_percentage = (cpu_cost / total_resource_cost * 100.0) if total_resource_cost else 0.0
@@ -554,8 +555,8 @@ def flowrate_trends(
 
     return FlowRateTrendsResponse(
         pricing=FlowRateTrendsPricing(
-            cpu_price_per_core_hour=round(float(pricing.cpu_price_per_core_hour), 6),
-            memory_price_per_gib_hour=round(float(pricing.memory_price_per_gib_hour), 6),
+            cpu_price_per_core_hour=round(float(cpu_price_per_core_hour), 6),
+            memory_price_per_gib_hour=round(float(memory_price_per_gib_hour), 6),
         ),
         resource_split=FlowRateTrendsResourceSplit(
             cpu_cost=round(float(cpu_cost), 2),
