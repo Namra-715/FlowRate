@@ -46,7 +46,10 @@ type DagFilterOption = {
 const ALL_DAGS_VALUE = "all_dags";
 
 const normalizeDagSearchText = (value: string): string =>
-  value.toLowerCase().replaceAll(/[\s_-]+/g, " ").trim();
+  value
+    .toLowerCase()
+    .replaceAll(/[\s_-]+/gu, " ")
+    .trim();
 
 export const FlowRateTrendsTopTasksCard = ({ isLoading, trends }: Props) => {
   const { t: translate } = useTranslation("dashboard");
@@ -77,7 +80,7 @@ export const FlowRateTrendsTopTasksCard = ({ isLoading, trends }: Props) => {
   );
 
   return (
-    <Box {...cardStyles} p={4}>
+    <Box {...cardStyles} minW={0} p={4}>
       <Flex align="center" justify="space-between" mb={3}>
         <Text color="#CBD4F1" fontSize="lg" fontWeight={600}>
           {translate("flowRateTrends.topTasksByEstimatedCost")}
@@ -123,7 +126,9 @@ export const FlowRateTrendsTopTasksCard = ({ isLoading, trends }: Props) => {
             isSearchable
             menuPlacement="auto"
             noOptionsMessage={() => translate("flowRateTrends.noDagsFound")}
-            onChange={(option: SingleValue<DagFilterOption>) => setSelectedDagFilter(option?.value ?? ALL_DAGS_VALUE)}
+            onChange={(option: SingleValue<DagFilterOption>) =>
+              setSelectedDagFilter(option?.value ?? ALL_DAGS_VALUE)
+            }
             openMenuOnFocus
             options={dagFilterOptions}
             placeholder={translate("flowRateTrends.allDags")}
@@ -151,9 +156,13 @@ export const FlowRateTrendsTopTasksCard = ({ isLoading, trends }: Props) => {
               <Text {...cellTextStyle}>{row.dag_id}</Text>
               <Badge
                 alignSelf="center"
-                backgroundColor={operatorStyles[row.operator?.toLowerCase().includes("kubernetes") ? "purple" : "blue"].bg}
+                backgroundColor={
+                  operatorStyles[row.operator?.toLowerCase().includes("kubernetes") ? "purple" : "blue"].bg
+                }
                 borderRadius="full"
-                color={operatorStyles[row.operator?.toLowerCase().includes("kubernetes") ? "purple" : "blue"].color}
+                color={
+                  operatorStyles[row.operator?.toLowerCase().includes("kubernetes") ? "purple" : "blue"].color
+                }
                 fontSize="12px"
                 fontWeight={500}
                 justifySelf="start"

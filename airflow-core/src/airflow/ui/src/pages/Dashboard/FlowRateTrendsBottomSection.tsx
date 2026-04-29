@@ -20,9 +20,11 @@ import { VStack } from "@chakra-ui/react";
 import { useState } from "react";
 
 import { ErrorAlert } from "src/components/ErrorAlert";
-import { useFlowRateTrends } from "src/queries/useFlowRateTrends";
 import type { FlowRateSummaryTimeframe } from "src/queries/useFlowRateSummary";
+import { useFlowRateTrends } from "src/queries/useFlowRateTrends";
 import { useAutoRefresh } from "src/utils";
+
+import { CostTrends } from "./CostTrends";
 import { FlowRateTrendsTopDagsAndResources } from "./FlowRateTrendsTopDagsAndResources";
 import { FlowRateTrendsTopTasksCard } from "./FlowRateTrendsTopTasksCard";
 
@@ -34,6 +36,8 @@ export const FlowRateTrendsBottomSection = () => {
   return (
     <VStack align="stretch" gap={3} mt={4}>
       <ErrorAlert error={trendsQuery.error} />
+
+      <CostTrends />
 
       <FlowRateTrendsTopDagsAndResources
         isLoading={trendsQuery.isLoading}

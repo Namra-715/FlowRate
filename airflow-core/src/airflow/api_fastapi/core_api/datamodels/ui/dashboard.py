@@ -142,3 +142,21 @@ class FlowRateConfiguration(BaseModel):
     retention_days: int
     cpu_price_per_core_hour: float
     memory_price_per_gib_hour: float
+
+
+class CostTrendsDagSummary(BaseModel):
+    """Per-DAG cost summary for the cost trends chart."""
+
+    dag_id: str
+    runs: int
+    total: float
+    avg_cost_per_run: float
+    daily_costs: list[float]
+
+
+class CostTrendsResponse(BaseModel):
+    """Cost trends response for the daily cost chart."""
+
+    dates: list[str]
+    daily_totals: list[float]
+    dag_summaries: list[CostTrendsDagSummary]
