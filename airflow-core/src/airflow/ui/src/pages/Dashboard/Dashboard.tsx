@@ -29,7 +29,6 @@ import { useConfig } from "src/queries/useConfig";
 import { ReactPlugin } from "../ReactPlugin";
 import { FavoriteDags } from "./FavoriteDags";
 import { FlowRateConfigurationSection } from "./FlowRateConfigurationSection";
-import { FlowRateTrendsBottomSection } from "./FlowRateTrendsBottomSection";
 import { Health } from "./Health";
 import { HistoricalMetrics } from "./HistoricalMetrics";
 import { MetricSummary, type FlowRateTab } from "./MetricSummary";
@@ -91,7 +90,12 @@ export const Dashboard = () => {
             <Box order={5}>
               <FavoriteDags />
             </Box>
-            <Box display="flex" flexDirection={{ base: "column", md: "row" }} gap={{ base: 4, md: 8 }} order={6}>
+            <Box
+              display="flex"
+              flexDirection={{ base: "column", md: "row" }}
+              gap={{ base: 4, md: 8 }}
+              order={6}
+            >
               <Health />
               <PoolSummary />
             </Box>
@@ -102,17 +106,12 @@ export const Dashboard = () => {
               <ReactPlugin key={plugin.name} reactApp={plugin} />
             ))}
           </>
-        ) : null}
-        {activeFlowRateTab === "trends" ? (
-          <Box order={4}>
-            <FlowRateTrendsBottomSection />
-          </Box>
-        ) : null}
+        ) : undefined}
         {activeFlowRateTab === "configuration" ? (
           <Box order={4}>
             <FlowRateConfigurationSection />
           </Box>
-        ) : null}
+        ) : undefined}
       </VStack>
     </Box>
   );

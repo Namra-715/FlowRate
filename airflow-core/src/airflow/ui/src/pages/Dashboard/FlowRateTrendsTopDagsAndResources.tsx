@@ -54,7 +54,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
 
   return (
     <Grid gap={3} templateColumns={{ base: "1fr", lg: "1.9fr 1fr" }}>
-      <Box {...cardStyles} p={4}>
+      <Box {...cardStyles} minW={0} p={4}>
         <Flex align="center" justify="space-between" mb={3}>
           <Text color="#CBD4F1" fontSize="lg" fontWeight={600}>
             {translate("flowRateTrends.topDagsByEstimatedCost")}
@@ -129,7 +129,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
         </Box>
       </Box>
 
-      <VStack align="stretch" gap={3}>
+      <VStack align="stretch" gap={3} minW={0}>
         <Box {...cardStyles} p={4}>
           <Text color="#CBD4F1" fontSize="lg" fontWeight={600} mb={4}>
             {translate("flowRateTrends.resourceSplit")}
@@ -161,7 +161,13 @@ export const FlowRateTrendsTopDagsAndResources = ({
                 <Text color="#CAD4F0" fontSize="26px" fontWeight={500} lineHeight={1}>
                   {(trends?.resource_split.cpu_percentage ?? 0).toFixed(0)}%
                 </Text>
-                <Text color="#5F6D92" fontSize="11px" fontWeight={500} letterSpacing="0.06em" textTransform="uppercase">
+                <Text
+                  color="#5F6D92"
+                  fontSize="11px"
+                  fontWeight={500}
+                  letterSpacing="0.06em"
+                  textTransform="uppercase"
+                >
                   {translate("flowRateTrends.cpu")}
                 </Text>
               </Box>
@@ -211,7 +217,10 @@ export const FlowRateTrendsTopDagsAndResources = ({
             </Text>
           </VStack>
           <Text color="#5F6D92" fontSize="12px" mt={3}>
-            {translate("flowRateTrends.pricingModel")} <Text as="span" color="#4F88FF">{translate("flowRateTrends.configure")}</Text>
+            {translate("flowRateTrends.pricingModel")}{" "}
+            <Text as="span" color="#4F88FF">
+              {translate("flowRateTrends.configure")}
+            </Text>
           </Text>
         </Box>
       </VStack>

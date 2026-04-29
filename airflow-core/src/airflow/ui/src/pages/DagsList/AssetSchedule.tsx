@@ -96,9 +96,9 @@ export const AssetSchedule = ({ assetExpression, dagId, timetablePartitioned, ti
 
   if (!nextRunEvents.length) {
     return (
-      <HStack>
+      <HStack overflow="hidden">
         <FiDatabase style={{ display: "inline", flexShrink: 0 }} />
-        <Text>{timetableSummary}</Text>
+        <Text truncate>{timetableSummary}</Text>
       </HStack>
     );
   }
@@ -108,9 +108,9 @@ export const AssetSchedule = ({ assetExpression, dagId, timetablePartitioned, ti
 
     if (pendingCount === 0) {
       return (
-        <HStack>
+        <HStack overflow="hidden">
           <FiDatabase style={{ display: "inline", flexShrink: 0 }} />
-          <Text>{translate("common:runTypes.asset_triggered")}</Text>
+          <Text truncate>{translate("common:runTypes.asset_triggered")}</Text>
         </HStack>
       );
     }

@@ -17,7 +17,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
-from datetime import datetime, timedelta
+from datetime import datetime, time as dt_time, timedelta
 from typing import Any, cast
 
 from fastapi import Depends, status
@@ -31,6 +31,8 @@ from airflow.api_fastapi.common.db.common import SessionDep
 from airflow.api_fastapi.common.parameters import DateTimeQuery, OptionalDateTimeQuery
 from airflow.api_fastapi.common.router import AirflowRouter
 from airflow.api_fastapi.core_api.datamodels.ui.dashboard import (
+    CostTrendsDagSummary,
+    CostTrendsResponse,
     DashboardDagStatsResponse,
     FlowRateConfiguration,
     FlowRateSummaryResourceSplit,
@@ -566,4 +568,101 @@ def flowrate_trends(
         ),
         top_dags=top_dags,
         top_tasks=top_tasks,
+    )
+
+
+@dashboard_router.get(
+    "/cost_trends",
+    dependencies=[Depends(requires_access_dag(method="GET"))],
+)
+def cost_trends(
+    session: SessionDep,
+    readable_dags_filter: ReadableDagsFilterDep,
+    days: int = 7,
+) -> CostTrendsResponse:
+    """Return per-DAG daily cost breakdown for the cost trends chart."""
+    flowrate_configuration = _load_flowrate_configuration()
+    cpu_price_per_core_hour = float(flowrate_configuration.cpu_price_per_core_hour)
+    memory_price_per_gib_hour = float(flowrate_configuration.memory_price_per_gib_hour)
+
+    current_time = timezone.utcnow()
+    # Build the list of dates (UTC dates, oldest first)
+    date_list = [(current_time - timedelta(days=days - 1 - i)).date() for i in range(days)]
+    date_strings = [d.isoformat() for d in date_list]
+
+    if not flowrate_configuration.enabled:
+        return CostTrendsResponse(
+            dates=date_strings,
+            daily_totals=[0.0] * days,
+            dag_summaries=[],
+        )
+
+    start_dt = datetime.combine(date_list[0], dt_time.min).replace(tzinfo=current_time.tzinfo)
+    permitted_dag_ids = cast("set[str]", readable_dags_filter.value)
+
+    rows = session.execute(
+        select(
+            FlowRateMetric.dag_id,
+            FlowRateMetric.run_id,
+            FlowRateMetric.estimated_cost,
+            FlowRateMetric.cpu_seconds,
+            FlowRateMetric.max_rss_mb,
+            FlowRateMetric.start_date,
+            FlowRateMetric.end_date,
+        ).where(
+            FlowRateMetric.dag_id.in_(permitted_dag_ids),
+            func.coalesce(FlowRateMetric.start_date, current_time) >= start_dt,
+        )
+    ).all()
+
+    # Compute cost per row using stored estimated_cost if available, else re-derive
+    dag_daily: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    dag_runs: dict[str, set[str]] = defaultdict(set)
+    dag_total: dict[str, float] = defaultdict(float)
+
+    for row in rows:
+        row_date = (row.start_date or current_time).date()
+        if row_date not in date_list:
+            continue
+
+        if row.estimated_cost is not None and row.estimated_cost > 0:
+            cost = float(row.estimated_cost)
+        else:
+            duration_hours = _duration_seconds(row.start_date, row.end_date) / 3600.0
+            cpu_cost = (float(row.cpu_seconds or 0) / 3600.0) * cpu_price_per_core_hour
+            mem_cost = (float(row.max_rss_mb or 0) / 1024.0) * duration_hours * memory_price_per_gib_hour
+            cost = cpu_cost + mem_cost
+
+        date_key = row_date.isoformat()
+        dag_daily[row.dag_id][date_key] += cost
+        dag_total[row.dag_id] += cost
+        if row.run_id:
+            dag_runs[row.dag_id].add(row.run_id)
+
+    # Compute daily totals
+    daily_totals_map: dict[str, float] = defaultdict(float)
+    for dag_id, day_map in dag_daily.items():
+        for date_key, cost in day_map.items():
+            daily_totals_map[date_key] += cost
+
+    daily_totals = [round(daily_totals_map.get(d, 0.0), 2) for d in date_strings]
+
+    # Sort DAGs by total cost descending, keep top 7
+    top_dag_ids = sorted(dag_total, key=lambda d: dag_total[d], reverse=True)[:TOP_DAGS_LIMIT]
+
+    dag_summaries = [
+        CostTrendsDagSummary(
+            dag_id=dag_id,
+            runs=len(dag_runs[dag_id]),
+            total=round(dag_total[dag_id], 2),
+            avg_cost_per_run=round(dag_total[dag_id] / len(dag_runs[dag_id]), 4) if dag_runs[dag_id] else 0.0,
+            daily_costs=[round(dag_daily[dag_id].get(d, 0.0), 2) for d in date_strings],
+        )
+        for dag_id in top_dag_ids
+    ]
+
+    return CostTrendsResponse(
+        dates=date_strings,
+        daily_totals=daily_totals,
+        dag_summaries=dag_summaries,
     )
