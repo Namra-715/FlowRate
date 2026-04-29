@@ -1,4 +1,4 @@
-/*! 
+/*!
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -16,6 +16,8 @@
  * specific language governing permissions and limitations
  * under the License.
  */
+
+/* eslint-disable i18next/no-literal-string, max-lines */
 import { Box, Button, Flex, Grid, HStack, Input, NativeSelect, Text, VStack } from "@chakra-ui/react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -37,12 +39,12 @@ type CloudProfile = {
 };
 
 const CLOUD_PROFILES: Array<CloudProfile> = [
-  { value: "custom", label: "Custom", cpuPrice: "", memoryPrice: "" },
-  { value: "gcp-n2-standard", label: "GCP\u2014n2-standard", cpuPrice: "0.048", memoryPrice: "0.006" },
-  { value: "gcp-e2-standard", label: "GCP\u2014e2-standard", cpuPrice: "0.034", memoryPrice: "0.0046" },
-  { value: "aws-m5-large", label: "AWS\u2014m5.large", cpuPrice: "0.048", memoryPrice: "0.006" },
-  { value: "aws-c5-large", label: "AWS\u2014c5.large", cpuPrice: "0.054", memoryPrice: "0.0054" },
-  { value: "azure-d2s-v3", label: "Azure\u2014D2s v3", cpuPrice: "0.048", memoryPrice: "0.006" },
+  { cpuPrice: "", label: "Custom", memoryPrice: "", value: "custom" },
+  { cpuPrice: "0.048", label: "GCP\u2014n2-standard", memoryPrice: "0.006", value: "gcp-n2-standard" },
+  { cpuPrice: "0.034", label: "GCP\u2014e2-standard", memoryPrice: "0.0046", value: "gcp-e2-standard" },
+  { cpuPrice: "0.048", label: "AWS\u2014m5.large", memoryPrice: "0.006", value: "aws-m5-large" },
+  { cpuPrice: "0.054", label: "AWS\u2014c5.large", memoryPrice: "0.0054", value: "aws-c5-large" },
+  { cpuPrice: "0.048", label: "Azure\u2014D2s v3", memoryPrice: "0.006", value: "azure-d2s-v3" },
 ];
 
 const surfaceStyles = {
@@ -76,7 +78,7 @@ type FlowRateConfigurationDraft = {
 
 const RETENTION_DAYS_MIN = 1;
 const RETENTION_DAYS_MAX = 365;
-const PRICE_DECIMAL_PATTERN = /^(\d+)?(\.\d*)?$/u;
+const PRICE_DECIMAL_PATTERN = /^(?:\d+)?(?:\.\d*)?$/u;
 
 const ConfigRow = ({ children, helper, label }: ConfigRowProps) => (
   <Grid
@@ -120,18 +122,19 @@ export const FlowRateConfigurationSection = () => {
       return;
     }
 
-    const cpu = (configurationQuery.data.cpu_price_per_core_hour ?? "").toString();
-    const mem = (configurationQuery.data.memory_price_per_gib_hour ?? "").toString();
+    const cpu = configurationQuery.data.cpu_price_per_core_hour.toString();
+    const mem = configurationQuery.data.memory_price_per_gib_hour.toString();
     const matchedProfile =
-      CLOUD_PROFILES.find((p) => p.cpuPrice === cpu && p.memoryPrice === mem && p.value !== "custom")?.value ??
-      "custom";
+      CLOUD_PROFILES.find(
+        (prof) => prof.cpuPrice === cpu && prof.memoryPrice === mem && prof.value !== "custom",
+      )?.value ?? "custom";
     const nextConfig: FlowRateConfigurationDraft = {
       cloudProfile: matchedProfile,
       cpuPricePerCoreHour: cpu,
       cpuRequestFallback: "1.0",
-      isEnabled: configurationQuery.data.enabled ?? false,
+      isEnabled: configurationQuery.data.enabled,
       memoryPricePerGibHour: mem,
-      retentionDays: (configurationQuery.data.retention_days ?? "").toString(),
+      retentionDays: configurationQuery.data.retention_days.toString(),
     };
 
     setSavedConfig(nextConfig);
@@ -160,18 +163,27 @@ export const FlowRateConfigurationSection = () => {
     }
 
     const payload: FlowRateConfiguration = {
-      enabled: draftConfig.isEnabled,
       cpu_price_per_core_hour: parsedCpuPricePerCoreHour,
+      enabled: draftConfig.isEnabled,
       memory_price_per_gib_hour: parsedMemoryPricePerGibHour,
       retention_days: parsedRetentionDays,
     };
     const updatedConfiguration = await updateConfigurationMutation.mutateAsync(payload);
+    const updatedCpu = updatedConfiguration.cpu_price_per_core_hour.toString();
+    const updatedMem = updatedConfiguration.memory_price_per_gib_hour.toString();
+    const updatedProfile =
+      CLOUD_PROFILES.find(
+        (prof) => prof.cpuPrice === updatedCpu && prof.memoryPrice === updatedMem && prof.value !== "custom",
+      )?.value ?? "custom";
     const nextSavedConfig: FlowRateConfigurationDraft = {
+      cloudProfile: updatedProfile,
+      cpuPricePerCoreHour: updatedCpu,
+      cpuRequestFallback: draftConfig.cpuRequestFallback,
       isEnabled: updatedConfiguration.enabled,
-      cpuPricePerCoreHour: updatedConfiguration.cpu_price_per_core_hour.toString(),
-      memoryPricePerGibHour: updatedConfiguration.memory_price_per_gib_hour.toString(),
+      memoryPricePerGibHour: updatedMem,
       retentionDays: updatedConfiguration.retention_days.toString(),
     };
+
     setSavedConfig(nextSavedConfig);
     setDraftConfig(nextSavedConfig);
   };
@@ -184,7 +196,12 @@ export const FlowRateConfigurationSection = () => {
 
   return (
     <VStack align="stretch" gap={4} mt={4}>
-      <Flex align={{ base: "stretch", md: "flex-start" }} direction={{ base: "column", md: "row" }} justify="space-between" gap={4}>
+      <Flex
+        align={{ base: "stretch", md: "flex-start" }}
+        direction={{ base: "column", md: "row" }}
+        gap={4}
+        justify="space-between"
+      >
         <Box>
           <Text color="#CBD4F1" fontSize="2xl" fontWeight={700} mb={1}>
             {translate("flowrate.configurationTitle", { defaultValue: "Configuration" })}
@@ -206,6 +223,7 @@ export const FlowRateConfigurationSection = () => {
             {translate("flowrate.resetToDefaults", { defaultValue: "Reset to defaults" })}
           </Button>
           <Button
+            _hover={{ backgroundColor: "#6A90FF" }}
             backgroundColor="#4F7BFF"
             color="#F7FAFF"
             disabled={
@@ -219,7 +237,6 @@ export const FlowRateConfigurationSection = () => {
             loading={updateConfigurationMutation.isPending}
             onClick={() => void saveConfiguration()}
             size="sm"
-            _hover={{ backgroundColor: "#6A90FF" }}
           >
             {translate("flowrate.saveChanges", { defaultValue: "Save changes" })}
           </Button>
@@ -255,9 +272,7 @@ export const FlowRateConfigurationSection = () => {
             <HStack>
               <Switch
                 checked={draftConfig.isEnabled}
-                onCheckedChange={({ checked }) =>
-                  setDraftConfig((currentConfig) => ({ ...currentConfig, isEnabled: checked }))
-                }
+                onCheckedChange={({ checked }) => setDraftConfig((cfg) => ({ ...cfg, isEnabled: checked }))}
                 variant="raised"
               />
               <Text color={draftConfig.isEnabled ? "#5BD475" : "#95A1C4"} fontSize="sm" fontWeight={600}>
@@ -284,7 +299,7 @@ export const FlowRateConfigurationSection = () => {
                 onChange={(event) =>
                   setDraftConfig((currentConfig) => ({
                     ...currentConfig,
-                    retentionDays: event.target.value.replace(/[^0-9]/gu, ""),
+                    retentionDays: event.target.value.replaceAll(/[^0-9]/gu, ""),
                   }))
                 }
                 size="sm"
@@ -315,7 +330,7 @@ export const FlowRateConfigurationSection = () => {
           </Text>
         </Box>
 
-        <Box px={5} pb={2}>
+        <Box pb={2} px={5}>
           <HStack
             backgroundColor="#2A1F0A"
             borderColor="#6B4C0A"
@@ -332,7 +347,7 @@ export const FlowRateConfigurationSection = () => {
             <Text color="#E8A838" fontSize="sm">
               {translate("flowrate.pricingDisclaimer", {
                 defaultValue:
-                  "These are request-based estimates allocated resources \u00d7 runtime, not actual billing.",
+                  "These are request-based estimates allocated resources \u00D7 runtime, not actual billing.",
               })}
             </Text>
           </HStack>
@@ -353,12 +368,13 @@ export const FlowRateConfigurationSection = () => {
             >
               <NativeSelect.Field
                 onChange={(event) => {
-                  const profile = CLOUD_PROFILES.find((p) => p.value === event.currentTarget.value);
+                  const profile = CLOUD_PROFILES.find((prof) => prof.value === event.currentTarget.value);
+
                   if (!profile || profile.value === "custom") {
-                    setDraftConfig((c) => ({ ...c, cloudProfile: "custom" }));
+                    setDraftConfig((cfg) => ({ ...cfg, cloudProfile: "custom" }));
                   } else {
-                    setDraftConfig((c) => ({
-                      ...c,
+                    setDraftConfig((cfg) => ({
+                      ...cfg,
                       cloudProfile: profile.value,
                       cpuPricePerCoreHour: profile.cpuPrice,
                       memoryPricePerGibHour: profile.memoryPrice,
@@ -367,9 +383,9 @@ export const FlowRateConfigurationSection = () => {
                 }}
                 value={draftConfig.cloudProfile}
               >
-                {CLOUD_PROFILES.map((p) => (
-                  <option key={p.value} value={p.value}>
-                    {p.label}
+                {CLOUD_PROFILES.map((prof) => (
+                  <option key={prof.value} value={prof.value}>
+                    {prof.label}
                   </option>
                 ))}
               </NativeSelect.Field>
@@ -379,7 +395,7 @@ export const FlowRateConfigurationSection = () => {
 
           <ConfigRow
             helper={translate("flowrate.cpuPricingHelp", {
-              defaultValue: "duration \u00d7 cpu_req \u00d7 cpu_price",
+              defaultValue: "duration \u00D7 cpu_req \u00D7 cpu_price",
             })}
             label={translate("flowrate.cpuPricing", { defaultValue: "CPU price" })}
           >
@@ -393,7 +409,7 @@ export const FlowRateConfigurationSection = () => {
                 overflow="hidden"
                 px={2}
               >
-                <Text color="#6F7895" fontSize="sm" flexShrink={0}>
+                <Text color="#6F7895" flexShrink={0} fontSize="sm">
                   $
                 </Text>
                 <Input
@@ -403,10 +419,15 @@ export const FlowRateConfigurationSection = () => {
                   disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
                   onChange={(event) => {
                     const nextValue = event.target.value;
+
                     if (!PRICE_DECIMAL_PATTERN.test(nextValue)) {
                       return;
                     }
-                    setDraftConfig((c) => ({ ...c, cloudProfile: "custom", cpuPricePerCoreHour: nextValue }));
+                    setDraftConfig((cfg) => ({
+                      ...cfg,
+                      cloudProfile: "custom",
+                      cpuPricePerCoreHour: nextValue,
+                    }));
                   }}
                   p={0}
                   size="sm"
@@ -414,21 +435,23 @@ export const FlowRateConfigurationSection = () => {
                   type="text"
                   value={draftConfig.cpuPricePerCoreHour}
                 />
-                <Text color="#6F7895" fontSize="sm" flexShrink={0} whiteSpace="nowrap">
+                <Text color="#6F7895" flexShrink={0} fontSize="sm" whiteSpace="nowrap">
                   /vCPU-hr
                 </Text>
               </HStack>
             </HStack>
-            {!isCpuPriceValid ? (
+            {isCpuPriceValid ? undefined : (
               <Text color="#FF7A45" fontSize="12px" mt={1}>
-                {translate("flowrate.priceValidation", { defaultValue: "Enter a non-negative numeric price." })}
+                {translate("flowrate.priceValidation", {
+                  defaultValue: "Enter a non-negative numeric price.",
+                })}
               </Text>
-            ) : undefined}
+            )}
           </ConfigRow>
 
           <ConfigRow
             helper={translate("flowrate.memoryPricingHelp", {
-              defaultValue: "duration \u00d7 mem_req_gb \u00d7 mem_price",
+              defaultValue: "duration \u00D7 mem_req_gb \u00D7 mem_price",
             })}
             label={translate("flowrate.memoryPricing", { defaultValue: "Memory price" })}
           >
@@ -442,7 +465,7 @@ export const FlowRateConfigurationSection = () => {
                 overflow="hidden"
                 px={2}
               >
-                <Text color="#6F7895" fontSize="sm" flexShrink={0}>
+                <Text color="#6F7895" flexShrink={0} fontSize="sm">
                   $
                 </Text>
                 <Input
@@ -452,10 +475,15 @@ export const FlowRateConfigurationSection = () => {
                   disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
                   onChange={(event) => {
                     const nextValue = event.target.value;
+
                     if (!PRICE_DECIMAL_PATTERN.test(nextValue)) {
                       return;
                     }
-                    setDraftConfig((c) => ({ ...c, cloudProfile: "custom", memoryPricePerGibHour: nextValue }));
+                    setDraftConfig((cfg) => ({
+                      ...cfg,
+                      cloudProfile: "custom",
+                      memoryPricePerGibHour: nextValue,
+                    }));
                   }}
                   p={0}
                   size="sm"
@@ -463,21 +491,23 @@ export const FlowRateConfigurationSection = () => {
                   type="text"
                   value={draftConfig.memoryPricePerGibHour}
                 />
-                <Text color="#6F7895" fontSize="sm" flexShrink={0} whiteSpace="nowrap">
+                <Text color="#6F7895" flexShrink={0} fontSize="sm" whiteSpace="nowrap">
                   / GB-hr
                 </Text>
               </HStack>
             </HStack>
-            {!isMemoryPriceValid ? (
+            {isMemoryPriceValid ? undefined : (
               <Text color="#FF7A45" fontSize="12px" mt={1}>
-                {translate("flowrate.priceValidation", { defaultValue: "Enter a non-negative numeric price." })}
+                {translate("flowrate.priceValidation", {
+                  defaultValue: "Enter a non-negative numeric price.",
+                })}
               </Text>
-            ) : undefined}
+            )}
           </ConfigRow>
 
           <ConfigRow
             helper={translate("flowrate.cpuFallbackHelp", {
-              defaultValue: "duration \u00d7 mem_req_gb \u00d7 mem_price",
+              defaultValue: "duration \u00D7 mem_req_gb \u00D7 mem_price",
             })}
             label={translate("flowrate.cpuFallback", { defaultValue: "Default CPU request fallback" })}
           >
@@ -498,10 +528,11 @@ export const FlowRateConfigurationSection = () => {
                   disabled={configurationQuery.isLoading || updateConfigurationMutation.isPending}
                   onChange={(event) => {
                     const nextValue = event.target.value;
+
                     if (!PRICE_DECIMAL_PATTERN.test(nextValue)) {
                       return;
                     }
-                    setDraftConfig((c) => ({ ...c, cpuRequestFallback: nextValue }));
+                    setDraftConfig((cfg) => ({ ...cfg, cpuRequestFallback: nextValue }));
                   }}
                   p={0}
                   size="sm"
@@ -509,7 +540,7 @@ export const FlowRateConfigurationSection = () => {
                   type="text"
                   value={draftConfig.cpuRequestFallback}
                 />
-                <Text color="#6F7895" fontSize="sm" flexShrink={0}>
+                <Text color="#6F7895" flexShrink={0} fontSize="sm">
                   VCPU
                 </Text>
               </HStack>
