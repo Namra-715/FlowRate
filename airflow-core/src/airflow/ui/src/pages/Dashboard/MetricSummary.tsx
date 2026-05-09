@@ -16,7 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Box, Button, Flex, HStack, NativeSelect, Text, VStack } from "@chakra-ui/react";
+import { Box, Button, Flex, HStack, NativeSelect, Text } from "@chakra-ui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FiRefreshCw } from "react-icons/fi";
@@ -27,12 +27,8 @@ import {
   type FlowRateSummaryTimeframe,
   useFlowRateSummary,
 } from "src/queries/useFlowRateSummary";
-import { useFlowRateTrends } from "src/queries/useFlowRateTrends";
 import { useAutoRefresh } from "src/utils";
 
-import { CostTrends } from "./CostTrends";
-import { FlowRateTrendsTopDagsAndResources } from "./FlowRateTrendsTopDagsAndResources";
-import { FlowRateTrendsTopTasksCard } from "./FlowRateTrendsTopTasksCard";
 import { MetricSummaryDashboardCards } from "./MetricSummaryDashboardCards";
 import {
   buildTrend,
@@ -42,14 +38,7 @@ import {
   zeroSummary,
 } from "./metricSummaryUtils";
 
-export type FlowRateTab = "configuration" | "dashboard" | "trends";
-
-type MetricSummaryProps = {
-  readonly activeTab: FlowRateTab;
-  readonly onTabChange: (tab: FlowRateTab) => void;
-};
-
-export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) => {
+export const MetricSummary = () => {
   const { t: translate } = useTranslation("dashboard");
   const [timeframe, setTimeframe] = useState<FlowRateSummaryTimeframe>("7d");
   const refetchInterval = useAutoRefresh({ checkPendingRuns: true });
@@ -129,19 +118,7 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
     },
   ];
 
-  const [trendsTimeframe, setTrendsTimeframe] = useState<FlowRateSummaryTimeframe>("7d");
-  const trendsRefetchInterval = useAutoRefresh({ checkPendingRuns: true });
-  const trendsQuery = useFlowRateTrends({
-    refetchInterval: trendsRefetchInterval,
-    timeframe: trendsTimeframe,
-  });
-
   const isRefreshing = currentSummaryQuery.isFetching || previousSummaryQuery.isFetching;
-  const flowRateTabs: Array<{ key: FlowRateTab; label: string }> = [
-    { key: "dashboard", label: "Dashboard" },
-    { key: "trends", label: "Trends" },
-    { key: "configuration", label: "Configuration" },
-  ];
 
   return (
     <Box>
@@ -152,101 +129,39 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
               defaultValue: "Resource consumption & cost analysis · Apache Airflow plugin",
             })}
           </Text>
-          <HStack borderBottomColor="border.subtle" borderBottomWidth={1} gap={4} textStyle="sm">
-            {flowRateTabs.map((tab) => (
-              <Box
-                _after={{
-                  backgroundColor: activeTab === tab.key ? "border.info" : "transparent",
-                  borderRadius: "full",
-                  bottom: 0,
-                  content: '""',
-                  height: "2px",
-                  left: 0,
-                  position: "absolute",
-                  right: 0,
-                }}
-                _focusVisible={{
-                  outline: "2px solid",
-                  outlineColor: "border.info",
-                  outlineOffset: "2px",
-                }}
-                _hover={{
-                  color: "fg",
-                }}
-                aria-selected={activeTab === tab.key}
-                as="button"
-                borderRadius="sm"
-                color={activeTab === tab.key ? "fg" : "fg.muted"}
-                fontWeight={activeTab === tab.key ? "semibold" : "normal"}
-                key={tab.key}
-                mb="-1px"
-                onClick={() => onTabChange(tab.key)}
-                pb={2}
-                position="relative"
-                px={0}
-                transition="color 0.2s ease"
-              >
-                {tab.label}
-              </Box>
-            ))}
-          </HStack>
         </Box>
 
-        {activeTab === "dashboard" ? (
-          <HStack alignSelf={{ base: "stretch", md: "center" }}>
-            <NativeSelect.Root size="sm" width="150px">
-              <NativeSelect.Field
-                onChange={(event) => setTimeframe(event.currentTarget.value as FlowRateSummaryTimeframe)}
-                value={timeframe}
-              >
-                <option value="24h">
-                  {translate("flowrate.last24Hours", { defaultValue: "Last 24 hours" })}
-                </option>
-                <option value="7d">{translate("flowrate.last7Days", { defaultValue: "Last 7 days" })}</option>
-                <option value="30d">
-                  {translate("flowrate.last30Days", { defaultValue: "Last 30 days" })}
-                </option>
-              </NativeSelect.Field>
-              <NativeSelect.Indicator />
-            </NativeSelect.Root>
-
-            <Button
-              loading={isRefreshing}
-              onClick={() => {
-                void currentSummaryQuery.refetch();
-                void previousSummaryQuery.refetch();
-              }}
-              size="sm"
-              variant="outline"
+        <HStack alignSelf={{ base: "stretch", md: "center" }}>
+          <NativeSelect.Root size="sm" width="150px">
+            <NativeSelect.Field
+              onChange={(event) => setTimeframe(event.currentTarget.value as FlowRateSummaryTimeframe)}
+              value={timeframe}
             >
-              <FiRefreshCw />
-              {translate("flowrate.refresh", { defaultValue: "Refresh" })}
-            </Button>
-          </HStack>
-        ) : undefined}
+              <option value="24h">{translate("flowrate.last24Hours", { defaultValue: "Last 24 hours" })}</option>
+              <option value="7d">{translate("flowrate.last7Days", { defaultValue: "Last 7 days" })}</option>
+              <option value="30d">{translate("flowrate.last30Days", { defaultValue: "Last 30 days" })}</option>
+            </NativeSelect.Field>
+            <NativeSelect.Indicator />
+          </NativeSelect.Root>
+
+          <Button
+            loading={isRefreshing}
+            onClick={() => {
+              void currentSummaryQuery.refetch();
+              void previousSummaryQuery.refetch();
+            }}
+            size="sm"
+            variant="outline"
+          >
+            <FiRefreshCw />
+            {translate("flowrate.refresh", { defaultValue: "Refresh" })}
+          </Button>
+        </HStack>
       </Flex>
 
-      {activeTab === "dashboard" ? (
-        <ErrorAlert error={currentSummaryQuery.error ?? previousSummaryQuery.error} />
-      ) : undefined}
-      {activeTab === "trends" ? <ErrorAlert error={trendsQuery.error} /> : undefined}
+      <ErrorAlert error={currentSummaryQuery.error ?? previousSummaryQuery.error} />
 
-      {activeTab === "dashboard" ? (
-        <MetricSummaryDashboardCards summaryCards={summaryCards} timeframe={timeframe} />
-      ) : undefined}
-
-      {activeTab === "trends" ? (
-        <VStack align="stretch" gap={3} mt={4}>
-          <CostTrends />
-          <FlowRateTrendsTopDagsAndResources
-            isLoading={trendsQuery.isLoading}
-            onTimeframeChange={setTrendsTimeframe}
-            timeframe={trendsTimeframe}
-            trends={trendsQuery.data}
-          />
-          <FlowRateTrendsTopTasksCard isLoading={trendsQuery.isLoading} trends={trendsQuery.data} />
-        </VStack>
-      ) : undefined}
+      <MetricSummaryDashboardCards summaryCards={summaryCards} timeframe={timeframe} />
     </Box>
   );
 };

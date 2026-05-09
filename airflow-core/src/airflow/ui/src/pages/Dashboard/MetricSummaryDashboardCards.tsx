@@ -19,6 +19,7 @@
 import { Badge, Box, Button, Flex, Grid, HStack, Text } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
 import { FiChevronRight } from "react-icons/fi";
+import { Link as RouterLink } from "react-router-dom";
 
 import type { FlowRateSummaryTimeframe } from "src/queries/useFlowRateSummary";
 
@@ -103,9 +104,11 @@ export const MetricSummaryDashboardCards = ({ summaryCards, timeframe }: Props) 
       </Grid>
 
       <Flex justifyContent="flex-end" mt={3}>
-        <Button color="fg.muted" size="sm" variant="ghost">
-          {translate("flowrate.seeMore", { defaultValue: "See More" })}
-          <FiChevronRight />
+        <Button asChild color="fg.muted" size="sm" variant="ghost">
+          <RouterLink to="/trends">
+            {translate("flowrate.seeMore", { defaultValue: "See More" })}
+            <FiChevronRight />
+          </RouterLink>
         </Button>
       </Flex>
     </>

@@ -32,8 +32,10 @@ import {
 } from "chart.js";
 import dayjs from "dayjs";
 import { Fragment } from "react";
+import { useTranslation } from "react-i18next";
 import { Line } from "react-chartjs-2";
 
+import { OpenAPI } from "openapi/requests/core/OpenAPI";
 import { cardStyles, formatCurrency, headerTextStyle, renderProgressTrack } from "./FlowRateTrendsShared";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
@@ -52,23 +54,44 @@ type CostTrendsData = {
   dates: Array<string>;
 };
 
+const buildFallbackCostTrends = (days: number): CostTrendsData => {
+  const now = dayjs();
+  const dates = Array.from({ length: days }, (_, index) => now.subtract(days - 1 - index, "day").toISOString());
+
+  return {
+    dag_summaries: [],
+    daily_totals: Array.from({ length: days }, () => 0),
+    dates,
+  };
+};
+
 const DAG_COLORS = ["#4F88FF", "#A855F7", "#F97316", "#22C55E", "#EF4444", "#06B6D4", "#EAB308"];
 
 const useCostTrends = (days: number) =>
   useQuery<CostTrendsData>({
     queryFn: async () => {
-      const res = await fetch(`/ui/dashboard/cost_trends?days=${days}`);
+      const res = await fetch(`${OpenAPI.BASE}/ui/dashboard/cost_trends?days=${days}`);
 
       if (!res.ok) {
-        throw new Error("Failed to fetch cost trends");
+        return buildFallbackCostTrends(days);
       }
 
-      return res.json() as Promise<CostTrendsData>;
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!contentType.includes("application/json")) {
+        return buildFallbackCostTrends(days);
+      }
+
+      try {
+        return (await res.json()) as CostTrendsData;
+      } catch {
+        return buildFallbackCostTrends(days);
+      }
     },
     queryKey: ["cost_trends", days],
   });
 
 export const CostTrends = () => {
+  const { t: translate } = useTranslation("dashboard");
   const { data, isLoading } = useCostTrends(7);
 
   if (isLoading) {
@@ -79,15 +102,8 @@ export const CostTrends = () => {
     );
   }
 
-  if (!data || data.dag_summaries.length === 0) {
-    return (
-      <Box color="#6F7895" py={8} textAlign="center">
-        No cost data available. Run some DAGs with FlowRate metrics enabled to see trends.
-      </Box>
-    );
-  }
-
-  const { dag_summaries: dagSummaries, daily_totals: dailyTotals, dates } = data;
+  const costTrendsData = data ?? buildFallbackCostTrends(7);
+  const { dag_summaries: dagSummaries, daily_totals: dailyTotals, dates } = costTrendsData;
   const topDags = dagSummaries.slice(0, 7);
   const grandTotal = dailyTotals.reduce((acc, cur) => acc + cur, 0);
   const maxAvgCost = Math.max(1, ...topDags.map((dag) => dag.avg_cost_per_run));
@@ -178,6 +194,14 @@ export const CostTrends = () => {
               <Text color="#4F88FF" fontSize="13px" fontWeight={700} textAlign="right">
                 {formatCurrency(grandTotal)}
               </Text>
+
+              {topDags.length === 0 ? (
+                <Text color="#6F7895" fontSize="13px" gridColumn={`1 / span ${dates.length + 2}`} mt={2}>
+                  {translate("flowRateTrends.noCostData", {
+                    defaultValue: "No cost data available. Run some DAGs with FlowRate metrics enabled to see trends.",
+                  })}
+                </Text>
+              ) : undefined}
             </Grid>
           </Box>
         </Box>

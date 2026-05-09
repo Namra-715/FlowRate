@@ -18,7 +18,7 @@
  */
 import { Box, Flex, Text, VStack, useDisclosure } from "@chakra-ui/react";
 import { useTranslation } from "react-i18next";
-import { FiDatabase, FiHome, FiClock } from "react-icons/fi";
+import { FiDatabase, FiHome, FiClock, FiTrendingUp } from "react-icons/fi";
 import { Link } from "react-router-dom";
 
 import {
@@ -96,7 +96,7 @@ export const Nav = () => {
   const { data } = useVersionServiceGetVersion();
   const { data: authLinks } = useAuthLinksServiceGetAuthMenus();
   const { data: pluginData } = usePluginServiceGetPlugins();
-  const { t: translate } = useTranslation("common");
+  const { t: translate } = useTranslation(["common", "dashboard"]);
   const { onClose: onCloseTimezone, onOpen: onOpenTimezone, open: isOpenTimezone } = useDisclosure();
   const { selectedTimezone } = useTimezone();
   const offset = getTimezoneOffsetString(selectedTimezone);
@@ -185,6 +185,12 @@ export const Nav = () => {
           icon={FiDatabase}
           title={translate("nav.assets")}
           to="assets"
+        />
+        <NavButton
+          data-testid="nav-trends-link"
+          icon={FiTrendingUp}
+          title={translate("dashboard:flowrate.trendsTitle", { defaultValue: "Trends" })}
+          to="trends"
         />
         <BrowseButton
           authorizedMenuItems={authLinks?.authorized_menu_items ?? []}

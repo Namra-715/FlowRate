@@ -40,6 +40,8 @@ import { Dashboard } from "src/pages/Dashboard";
 import { ErrorPage } from "src/pages/Error";
 import { Events } from "src/pages/Events";
 import { ExternalView } from "src/pages/ExternalView";
+import { FlowRateConfiguration } from "src/pages/FlowRateConfiguration";
+import { FlowRateTrends } from "src/pages/FlowRateTrends";
 import { GroupTaskInstance } from "src/pages/GroupTaskInstance";
 import { HITLTaskInstances } from "src/pages/HITLTaskInstances";
 import { Jobs } from "src/pages/Jobs";
@@ -116,6 +118,14 @@ export const routerConfig = [
       {
         element: <AssetsList />,
         path: "assets",
+      },
+      {
+        element: <FlowRateTrends />,
+        path: "trends",
+      },
+      {
+        element: <FlowRateConfiguration />,
+        path: "configs/flowrate",
       },
       {
         element: <Configs />,
