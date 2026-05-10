@@ -17,6 +17,7 @@
 # under the License.
 
 from __future__ import annotations
+import inspect
 import os
 import tempfile
 import time
@@ -25,23 +26,17 @@ from airflow.sdk import DAG, timezone
 
 
 def _demo_task() -> None:
-    # Allocate 32 MB block
     data = bytearray(32 * 1024 * 1024)
-    
-    # Counter
     total = 0
 
-    # CPU heavy loop
     for index in range(2000000):
         total += index % 99
 
     fd, path = tempfile.mkstemp(prefix="flowrate-demo-", suffix=".bin")
     try:
         with os.fdopen(fd, "wb") as handle:
-            # Write 32 MB data block to disk
             handle.write(data)
         with open(path, "rb") as handle:
-            # Read 32 MB data block, already cached (not from disk)
             handle.read()
     finally:
         os.remove(path)
@@ -49,14 +44,19 @@ def _demo_task() -> None:
     time.sleep(1)
     print(f"FlowRate demo task finished with total={total}.")
 
-with DAG(
-    dag_id="flowrate_demo_dag",
-    start_date=timezone.datetime(2024, 1, 1),
-    schedule=None,
-    catchup=False,
-    enable_cost_metrics=True,
-    tags=["flowrate", "demo"],
-) as dag:
+dag_kwargs = {
+    "dag_id": "flowrate_demo_dag",
+    "start_date": timezone.datetime(2024, 1, 1),
+    "schedule": None,
+    "catchup": False,
+    "tags": ["flowrate", "demo"],
+}
+
+# Keep DAG importable on older Airflow runtimes while enabling cost metrics when supported.
+if "enable_cost_metrics" in inspect.signature(DAG.__init__).parameters:
+    dag_kwargs["enable_cost_metrics"] = True
+
+with DAG(**dag_kwargs) as dag:
     PythonOperator(
         task_id="flowrate_demo_task",
         python_callable=_demo_task,

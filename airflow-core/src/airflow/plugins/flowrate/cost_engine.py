@@ -31,6 +31,7 @@ if TYPE_CHECKING:
     from airflow.models.taskinstance import TaskInstance
 
 log = logging.getLogger(__name__)
+FLOWRATE_CONFIGURATION_VARIABLE_KEY = "flowrate.ui.configuration"
 
 
 @dataclass(frozen=True)
@@ -49,8 +50,39 @@ def _safe_float(section: str, key: str, fallback: float) -> float:
         return fallback
 
 
+def _get_ui_pricing() -> FlowRatePricing | None:
+    try:
+        from airflow.models.variable import Variable
+
+        ui_configuration = Variable.get(
+            FLOWRATE_CONFIGURATION_VARIABLE_KEY,
+            default_var=None,
+            deserialize_json=True,
+        )
+    except Exception:
+        return None
+
+    if not isinstance(ui_configuration, dict):
+        return None
+
+    try:
+        cpu_price = max(float(ui_configuration.get("cpu_price_per_core_hour")), 0.0)
+        memory_price = max(float(ui_configuration.get("memory_price_per_gib_hour")), 0.0)
+    except (TypeError, ValueError):
+        return None
+
+    return FlowRatePricing(
+        cpu_price_per_core_hour=cpu_price,
+        memory_price_per_gib_hour=memory_price,
+    )
+
+
 def get_pricing() -> FlowRatePricing:
-    # Load FlowRate pricing config, using hardcoded defaults for now
+    # Load FlowRate pricing config, preferring UI-saved values when available.
+    ui_pricing = _get_ui_pricing()
+    if ui_pricing is not None:
+        return ui_pricing
+
     return FlowRatePricing(
         cpu_price_per_core_hour=_safe_float("flowrate", "cpu_price_per_core_hour", 0.031611),
         memory_price_per_gib_hour=_safe_float("flowrate", "memory_price_per_gib_hour", 0.004237),
@@ -63,12 +95,12 @@ def estimate_cost_from_usage_metrics(
     max_rss_mb: float | None,
     duration_seconds: float,
     pricing: FlowRatePricing | None = None,
-) -> float | None:
+) -> float:
     # Estimates cost from observed local task usage metrics.
     if duration_seconds <= 0:
         return 0.0
     if cpu_seconds is None and max_rss_mb is None:
-        return None
+        return 0.0
     effective_pricing = pricing or get_pricing()
     hours = duration_seconds / 3600.0
     cpu_cost = 0.0
@@ -83,40 +115,45 @@ def estimate_cost_from_usage_metrics(
 
 
 def persist_estimated_ti_cost(ti: TaskInstance, *, end_date: datetime | None = None) -> None:
-    # Computes a task instance cost estimate and persists it with task metrics
-    if not ti.start_date:
-        return
-    effective_end = end_date or ti.end_date
-    if not effective_end:
-        return
-    duration_seconds = max((effective_end - ti.start_date).total_seconds(), 0.0)
-    pricing = get_pricing()
-    cpu_seconds = getattr(ti, "cpu_seconds", None)
-    max_rss_mb = getattr(ti, "max_rss_mb", None)
-    estimated_cost = estimate_cost_from_usage_metrics(
-        cpu_seconds=cpu_seconds,
-        max_rss_mb=max_rss_mb,
-        duration_seconds=duration_seconds,
-        pricing=pricing,
-    )
+    # Computes a task instance cost estimate and persists it with task metrics.
+    # This path must never fail task finalization.
+    try:
+        if not ti.start_date:
+            return
+        effective_end = end_date or ti.end_date
+        if not effective_end:
+            return
+        duration_seconds = max((effective_end - ti.start_date).total_seconds(), 0.0)
+        pricing = get_pricing()
+        cpu_seconds = getattr(ti, "cpu_seconds", None)
+        max_rss_mb = getattr(ti, "max_rss_mb", None)
+        estimated_cost = estimate_cost_from_usage_metrics(
+            cpu_seconds=cpu_seconds,
+            max_rss_mb=max_rss_mb,
+            duration_seconds=duration_seconds,
+            pricing=pricing,
+        )
 
-    # Local executor: avoid a DB row per task when there is no measurable cost.
-    if estimated_cost is None:
-        return
-
-    save_task_metric(
-        dag_id=ti.dag_id,
-        run_id=ti.run_id,
-        task_id=ti.task_id,
-        start_date=ti.start_date,
-        end_date=effective_end,
-        cpu_seconds=cpu_seconds,
-        max_rss_mb=max_rss_mb,
-        avg_cpu_cores=getattr(ti, "avg_cpu_cores", None),
-        read_bytes=getattr(ti, "read_bytes", None),
-        write_bytes=getattr(ti, "write_bytes", None),
-        estimated_cost=estimated_cost,
-    )
+        save_task_metric(
+            dag_id=ti.dag_id,
+            run_id=ti.run_id,
+            task_id=ti.task_id,
+            start_date=ti.start_date,
+            end_date=effective_end,
+            cpu_seconds=cpu_seconds,
+            max_rss_mb=max_rss_mb,
+            avg_cpu_cores=getattr(ti, "avg_cpu_cores", None),
+            read_bytes=getattr(ti, "read_bytes", None),
+            write_bytes=getattr(ti, "write_bytes", None),
+            estimated_cost=estimated_cost,
+        )
+    except Exception:
+        log.exception(
+            "Failed to persist FlowRate task metrics for dag_id=%s run_id=%s task_id=%s",
+            getattr(ti, "dag_id", None),
+            getattr(ti, "run_id", None),
+            getattr(ti, "task_id", None),
+        )
 
 
 def floor_to_window(ts: datetime, window_minutes: int) -> datetime:

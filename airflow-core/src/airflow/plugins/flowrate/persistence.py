@@ -33,17 +33,43 @@ if TYPE_CHECKING:
     from sqlalchemy.orm import Session
 
 log = logging.getLogger(__name__)
+FLOWRATE_CONFIGURATION_VARIABLE_KEY = "flowrate.ui.configuration"
 
 
 def _is_flowrate_enabled() -> bool:
+    config_enabled = False
     try:
-        return conf.getboolean("flowrate", "enabled")
+        config_enabled = conf.getboolean("flowrate", "enabled")
     except Exception:
-        env_value = os.getenv("AIRFLOW__FLOWRATE__ENABLED")
-        if env_value is not None:
-            return env_value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
-        log.debug("FlowRate configuration not found; treating as disabled.", exc_info=True)
-        return False
+        log.debug("FlowRate configuration not found in airflow.cfg.", exc_info=True)
+
+    env_value = os.getenv("AIRFLOW__FLOWRATE__ENABLED")
+    if env_value is not None:
+        return env_value.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+
+    if config_enabled:
+        return True
+
+    try:
+        from airflow.models.variable import Variable
+
+        ui_configuration = Variable.get(
+            FLOWRATE_CONFIGURATION_VARIABLE_KEY,
+            default_var=None,
+            deserialize_json=True,
+        )
+        if isinstance(ui_configuration, dict):
+            enabled = ui_configuration.get("enabled")
+            if isinstance(enabled, bool):
+                return enabled
+            if isinstance(enabled, str):
+                return enabled.strip().lower() in {"1", "true", "t", "yes", "y", "on"}
+            if isinstance(enabled, int):
+                return enabled != 0
+    except Exception:
+        log.debug("FlowRate UI configuration not found; treating as disabled.", exc_info=True)
+
+    return False
 
 
 @provide_session

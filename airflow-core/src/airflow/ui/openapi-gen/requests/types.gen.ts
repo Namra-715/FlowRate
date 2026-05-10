@@ -1926,6 +1926,9 @@ export type DAGWithLatestDagRunsResponse = {
     latest_dag_runs: Array<DAGRunLightResponse>;
     pending_actions: Array<HITLDetail>;
     is_favorite: boolean;
+    number_of_runs: number;
+    avg_duration: number | null;
+    estimated_cost: number | null;
     /**
      * Return file token.
      */

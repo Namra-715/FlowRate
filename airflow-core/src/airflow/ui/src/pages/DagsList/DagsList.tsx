@@ -49,6 +49,7 @@ import { SearchParamsKeys, type SearchParamsKeysType } from "src/constants/searc
 import { DagsLayout } from "src/layouts/DagsLayout";
 import { useConfig } from "src/queries/useConfig";
 import { useDags } from "src/queries/useDags";
+import { formatFlowRateCost, formatMinutesSeconds } from "src/utils";
 
 import { DAGImportErrors } from "../Dashboard/Stats/DAGImportErrors";
 import { DagCard } from "./DagCard";
@@ -136,6 +137,24 @@ const createColumns = (
     }) => <DagTags hideIcon tags={tags} />,
     enableSorting: false,
     header: () => translate("dagDetails.tags"),
+  },
+  {
+    accessorKey: "number_of_runs",
+    cell: ({ row: { original } }) => original.number_of_runs ?? "—",
+    enableSorting: false,
+    header: "Number of Runs",
+  },
+  {
+    accessorKey: "avg_duration",
+    cell: ({ row: { original } }) => formatMinutesSeconds(original.avg_duration),
+    enableSorting: false,
+    header: "Average Duration",
+  },
+  {
+    accessorKey: "estimated_cost",
+    cell: ({ row: { original } }) => formatFlowRateCost(original.estimated_cost),
+    enableSorting: false,
+    header: "Estimated Cost",
   },
   {
     accessorKey: "pending_actions",

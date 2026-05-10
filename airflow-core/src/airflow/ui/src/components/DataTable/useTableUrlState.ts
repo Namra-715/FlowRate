@@ -33,7 +33,7 @@ export const useTableURLState = (defaultState?: Partial<TableState>) => {
 
   const [sorting, setSorting] = useLocalStorage<TableState["sorting"]>(tableSortKey(pageName), []);
 
-  const pageSize = useConfig("fallback_page_limit") as number;
+  const pageSize = (useConfig("fallback_page_limit") ?? 25) as number;
 
   const defaultTableState = {
     pagination: {

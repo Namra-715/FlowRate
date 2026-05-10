@@ -29,7 +29,7 @@ import { Stat } from "src/components/Stat";
 import { TogglePause } from "src/components/TogglePause";
 import { TriggerDAGButton } from "src/components/TriggerDag/TriggerDAGButton";
 import { Tooltip } from "src/components/ui";
-import { isStatePending, useAutoRefresh } from "src/utils";
+import { formatFlowRateCost, formatMinutesSeconds, isStatePending, useAutoRefresh } from "src/utils";
 
 import { DagTags } from "./DagTags";
 import { RecentRuns } from "./RecentRuns";
@@ -71,7 +71,7 @@ export const DagCard = ({ dag }: Props) => {
           <DeleteDagButton dagDisplayName={dag.dag_display_name} dagId={dag.dag_id} />
         </HStack>
       </Flex>
-      <SimpleGrid columns={4} gap={1} height={20} px={3} py={1}>
+      <SimpleGrid columns={7} gap={1} height={20} px={3} py={1}>
         <Stat data-testid="schedule" label={translate("dagDetails.schedule")}>
           <Schedule
             assetExpression={dag.asset_expression}
@@ -106,6 +106,15 @@ export const DagCard = ({ dag }: Props) => {
               runAfter={dag.next_dagrun_run_after as string}
             />
           ) : undefined}
+        </Stat>
+        <Stat data-testid="number-of-runs" label="Number of Runs">
+          {dag.number_of_runs ?? "—"}
+        </Stat>
+        <Stat data-testid="avg-duration" label="Avg Duration">
+          {formatMinutesSeconds(dag.avg_duration)}
+        </Stat>
+        <Stat data-testid="estimated-cost" label="Est. Cost">
+          {formatFlowRateCost(dag.estimated_cost)}
         </Stat>
         <RecentRuns latestRuns={dag.latest_dag_runs} />
       </SimpleGrid>
