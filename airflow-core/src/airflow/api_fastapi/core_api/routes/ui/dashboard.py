@@ -76,6 +76,15 @@ def _average(values: list[float]) -> float:
     return sum(values) / len(values)
 
 
+def _normalized_percentage_split(part: float, total: float) -> tuple[float, float]:
+    if total <= 0:
+        return 0.0, 0.0
+
+    cpu_percentage = round((part / total) * 100.0, 1)
+    memory_percentage = round(100.0 - cpu_percentage, 1)
+    return cpu_percentage, memory_percentage
+
+
 def _default_flowrate_configuration() -> FlowRateConfiguration:
     enabled = False
     try:
@@ -370,8 +379,6 @@ def flowrate_summary(
             func.coalesce(func.sum(FlowRateMetric.estimated_cost), 0.0).label("total_estimated_cost"),
             func.count(FlowRateMetric.id).label("tasks_tracked"),
             select(func.count()).select_from(distinct_dag_runs).scalar_subquery().label("dag_run_count"),
-            func.coalesce(func.sum(FlowRateMetric.cpu_seconds), 0.0).label("total_cpu_seconds"),
-            func.coalesce(func.sum(FlowRateMetric.max_rss_mb), 0.0).label("total_memory_mb"),
         )
         .where(*flowrate_filters)
     ).one()
@@ -380,17 +387,36 @@ def flowrate_summary(
         summary.total_estimated_cost / summary.dag_run_count if summary.dag_run_count else 0.0
     )
 
-    total_resource = summary.total_cpu_seconds + summary.total_memory_mb
-    cpu_percentage = summary.total_cpu_seconds / total_resource * 100 if total_resource else 0.0
-    memory_percentage = 100.0 - cpu_percentage if total_resource else 0.0
+    pricing = get_pricing()
+    resource_rows = session.execute(
+        select(
+            FlowRateMetric.estimated_cost,
+            FlowRateMetric.cpu_seconds,
+            FlowRateMetric.max_rss_mb,
+            FlowRateMetric.start_date,
+            FlowRateMetric.end_date,
+        ).where(*flowrate_filters)
+    ).all()
+
+    cpu_cost = 0.0
+    memory_cost = 0.0
+    for row in resource_rows:
+        duration_hours = _duration_seconds(row.start_date, row.end_date) / 3600.0
+        if row.cpu_seconds:
+            cpu_cost += (float(row.cpu_seconds) / 3600.0) * pricing.cpu_price_per_core_hour
+        if row.max_rss_mb and duration_hours > 0:
+            memory_cost += (float(row.max_rss_mb) / 1024.0) * duration_hours * pricing.memory_price_per_gib_hour
+
+    total_resource_cost = cpu_cost + memory_cost
+    cpu_percentage, memory_percentage = _normalized_percentage_split(cpu_cost, total_resource_cost)
 
     return FlowRateSummaryResponse(
         total_estimated_cost=round(float(summary.total_estimated_cost), 2),
         tasks_tracked=summary.tasks_tracked,
         average_cost_per_dag_run=round(float(average_cost_per_dag_run), 2),
         resource_split=FlowRateSummaryResourceSplit(
-            cpu_percentage=round(float(cpu_percentage), 1),
-            memory_percentage=round(float(memory_percentage), 1),
+            cpu_percentage=cpu_percentage,
+            memory_percentage=memory_percentage,
         ),
     )
 
@@ -535,6 +561,7 @@ def flowrate_trends(
 
     resource_rows = session.execute(
         select(
+            FlowRateMetric.estimated_cost,
             FlowRateMetric.cpu_seconds,
             FlowRateMetric.max_rss_mb,
             FlowRateMetric.start_date,
@@ -552,8 +579,7 @@ def flowrate_trends(
             memory_cost += (float(row.max_rss_mb) / 1024.0) * duration_hours * memory_price_per_gib_hour
 
     total_resource_cost = cpu_cost + memory_cost
-    cpu_percentage = (cpu_cost / total_resource_cost * 100.0) if total_resource_cost else 0.0
-    memory_percentage = 100.0 - cpu_percentage if total_resource_cost else 0.0
+    cpu_percentage, memory_percentage = _normalized_percentage_split(cpu_cost, total_resource_cost)
 
     return FlowRateTrendsResponse(
         pricing=FlowRateTrendsPricing(
@@ -563,8 +589,8 @@ def flowrate_trends(
         resource_split=FlowRateTrendsResourceSplit(
             cpu_cost=round(float(cpu_cost), 2),
             memory_cost=round(float(memory_cost), 2),
-            cpu_percentage=round(float(cpu_percentage), 1),
-            memory_percentage=round(float(memory_percentage), 1),
+            cpu_percentage=cpu_percentage,
+            memory_percentage=memory_percentage,
         ),
         top_dags=top_dags,
         top_tasks=top_tasks,
@@ -625,7 +651,7 @@ def cost_trends(
         if row_date not in date_list:
             continue
 
-        if row.estimated_cost is not None and row.estimated_cost > 0:
+        if row.estimated_cost is not None:
             cost = float(row.estimated_cost)
         else:
             duration_hours = _duration_seconds(row.start_date, row.end_date) / 3600.0

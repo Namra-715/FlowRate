@@ -30,7 +30,7 @@ import structlog
 from cadwyn import VersionedAPIRouter
 from fastapi import Body, HTTPException, Query, Security, status
 from pydantic import JsonValue
-from sqlalchemy import and_, func, or_, text, tuple_, update
+from sqlalchemy import and_, func, or_, tuple_, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import NoResultFound, SQLAlchemyError
 from sqlalchemy.orm import joinedload
@@ -363,7 +363,16 @@ def ti_update_state(
             },
         )
 
+    requested_state = TaskInstanceState(ti_patch_payload.state.value)
+
     if previous_state != TaskInstanceState.RUNNING:
+        if previous_state == requested_state:
+            log.info(
+                "Duplicate task instance state update received; treating as idempotent",
+                previous_state=previous_state,
+                requested_state=requested_state,
+            )
+            return
         log.warning(
             "Cannot update Task Instance in invalid state",
             previous_state=previous_state,
@@ -378,8 +387,7 @@ def ti_update_state(
         )
 
     # We exclude_unset to avoid updating fields that are not set in the payload
-    _FLOWRATE_COLS = {"cpu_seconds", "max_rss_mb", "execution_platform", "avg_cpu_cores", "read_bytes", "write_bytes"}
-    data = ti_patch_payload.model_dump(exclude={"task_outlets", "outlet_events"} | _FLOWRATE_COLS, exclude_unset=True)
+    data = ti_patch_payload.model_dump(exclude={"task_outlets", "outlet_events"}, exclude_unset=True)
     query = update(TI).where(TI.id == task_instance_id).values(data)
 
     try:
@@ -467,18 +475,16 @@ def _create_ti_state_update_query_and_update_state(
         query = query.values(state=updated_state, next_method=None, next_kwargs=None)
 
         if ti is not None:
-            flowrate_attrs = {
-                attr: getattr(ti_patch_payload, attr, None)
-                for attr in ("cpu_seconds", "max_rss_mb", "execution_platform", "avg_cpu_cores", "read_bytes", "write_bytes")
-                if getattr(ti_patch_payload, attr, None) is not None
-            }
-            if flowrate_attrs:
-                set_clause = ", ".join(f"{k} = :{k}" for k in flowrate_attrs)
-                session.execute(
-                    text(f"UPDATE task_instance SET {set_clause} WHERE id = :ti_id"),
-                    {**flowrate_attrs, "ti_id": str(task_instance_id)},
-                )
-                ti.__dict__.update(flowrate_attrs)
+            for attr in (
+                "cpu_seconds",
+                "max_rss_mb",
+                "execution_platform",
+                "avg_cpu_cores",
+                "read_bytes",
+                "write_bytes",
+            ):
+                if getattr(ti_patch_payload, attr, None) is not None:
+                    setattr(ti, attr, getattr(ti_patch_payload, attr))
             persist_estimated_ti_cost(ti, end_date=ti_patch_payload.end_date)
 
         if updated_state == TaskInstanceState.FAILED:

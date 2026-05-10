@@ -347,7 +347,7 @@ export const FlowRateConfigurationSection = () => {
             <Text color="#E8A838" fontSize="sm">
               {translate("flowrate.pricingDisclaimer", {
                 defaultValue:
-                  "These are request-based estimates allocated resources \u00D7 runtime, not actual billing.",
+                  "These are estimated costs based on measured task CPU time and peak memory over runtime, not actual provider billing.",
               })}
             </Text>
           </HStack>
@@ -395,7 +395,7 @@ export const FlowRateConfigurationSection = () => {
 
           <ConfigRow
             helper={translate("flowrate.cpuPricingHelp", {
-              defaultValue: "duration \u00D7 cpu_req \u00D7 cpu_price",
+              defaultValue: "cpu_seconds \u00F7 3600 \u00D7 cpu_price",
             })}
             label={translate("flowrate.cpuPricing", { defaultValue: "CPU price" })}
           >
@@ -451,7 +451,7 @@ export const FlowRateConfigurationSection = () => {
 
           <ConfigRow
             helper={translate("flowrate.memoryPricingHelp", {
-              defaultValue: "duration \u00D7 mem_req_gb \u00D7 mem_price",
+              defaultValue: "peak_memory_gib \u00D7 runtime_hours \u00D7 memory_price",
             })}
             label={translate("flowrate.memoryPricing", { defaultValue: "Memory price" })}
           >
@@ -507,9 +507,9 @@ export const FlowRateConfigurationSection = () => {
 
           <ConfigRow
             helper={translate("flowrate.cpuFallbackHelp", {
-              defaultValue: "duration \u00D7 mem_req_gb \u00D7 mem_price",
+              defaultValue: "Reserved for future fallback logic; current estimates use measured CPU time.",
             })}
-            label={translate("flowrate.cpuFallback", { defaultValue: "Default CPU request fallback" })}
+            label={translate("flowrate.cpuFallback", { defaultValue: "CPU fallback setting" })}
           >
             <HStack>
               <HStack

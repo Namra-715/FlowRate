@@ -33,6 +33,14 @@ import {
   statusStyles,
 } from "./FlowRateTrendsShared";
 
+const CLOUD_PROFILES = [
+  { cpuPrice: "0.048", label: "GCP n2-standard", memoryPrice: "0.006" },
+  { cpuPrice: "0.034", label: "GCP e2-standard", memoryPrice: "0.0046" },
+  { cpuPrice: "0.048", label: "AWS m5.large", memoryPrice: "0.006" },
+  { cpuPrice: "0.054", label: "AWS c5.large", memoryPrice: "0.0054" },
+  { cpuPrice: "0.048", label: "Azure D2s v3", memoryPrice: "0.006" },
+] as const;
+
 type Props = {
   readonly isLoading: boolean;
   readonly onTimeframeChange: (timeframe: FlowRateSummaryTimeframe) => void;
@@ -47,6 +55,12 @@ export const FlowRateTrendsTopDagsAndResources = ({
   trends,
 }: Props) => {
   const { t: translate } = useTranslation("dashboard");
+  const cpuPercentageDisplay = Math.round(trends?.resource_split.cpu_percentage ?? 0);
+  const cpuPrice = Number(trends?.pricing.cpu_price_per_core_hour ?? 0).toString();
+  const memoryPrice = Number(trends?.pricing.memory_price_per_gib_hour ?? 0).toString();
+  const pricingLabel =
+    CLOUD_PROFILES.find((profile) => profile.cpuPrice === cpuPrice && profile.memoryPrice === memoryPrice)?.label ??
+    "Custom";
   const maxDagCost = useMemo(
     () => Math.max(1, ...(trends?.top_dags.map((row) => row.estimated_cost) ?? [1])),
     [trends?.top_dags],
@@ -159,7 +173,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
                 transform="translate(-50%, -50%)"
               >
                 <Text color="#CAD4F0" fontSize="26px" fontWeight={500} lineHeight={1}>
-                  {(trends?.resource_split.cpu_percentage ?? 0).toFixed(0)}%
+                  {cpuPercentageDisplay}%
                 </Text>
                 <Text
                   color="#5F6D92"
@@ -217,7 +231,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
             </Text>
           </VStack>
           <Text color="#5F6D92" fontSize="12px" mt={3}>
-            {translate("flowRateTrends.pricingModel")}{" "}
+            {pricingLabel}{" "}
             <Text as="span" color="#4F88FF">
               {translate("flowRateTrends.configure")}
             </Text>

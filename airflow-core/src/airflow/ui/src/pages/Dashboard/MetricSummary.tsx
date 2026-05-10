@@ -17,6 +17,7 @@
  * under the License.
  */
 import { Box, Button, Flex, HStack, NativeSelect, Text, VStack } from "@chakra-ui/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FiRefreshCw } from "react-icons/fi";
@@ -51,6 +52,7 @@ type MetricSummaryProps = {
 
 export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) => {
   const { t: translate } = useTranslation("dashboard");
+  const queryClient = useQueryClient();
   const [timeframe, setTimeframe] = useState<FlowRateSummaryTimeframe>("7d");
   const refetchInterval = useAutoRefresh({ checkPendingRuns: true });
 
@@ -89,6 +91,8 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
 
   const totalEstimatedCost = formatCurrencyParts(currentSummary.total_estimated_cost);
   const averageCostPerDagRun = formatCurrencyParts(currentSummary.average_cost_per_dag_run);
+  const cpuPercentageDisplay = Math.round(currentSummary.resource_split.cpu_percentage);
+  const memoryPercentageDisplay = 100 - cpuPercentageDisplay;
 
   const summaryCards: Array<SummaryCard> = [
     {
@@ -123,9 +127,9 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
     {
       accent: "blue",
       label: "CPU · MEMORY SPLIT",
-      secondary: `${currentSummary.resource_split.memory_percentage.toFixed(0)}% mem`,
+      secondary: `${memoryPercentageDisplay}% mem`,
       suffix: " cpu/",
-      value: `${currentSummary.resource_split.cpu_percentage.toFixed(0)}%`,
+      value: `${cpuPercentageDisplay}%`,
     },
   ];
 
@@ -137,6 +141,7 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
   });
 
   const isRefreshing = currentSummaryQuery.isFetching || previousSummaryQuery.isFetching;
+  const isRefreshingTrends = trendsQuery.isFetching;
   const flowRateTabs: Array<{ key: FlowRateTab; label: string }> = [
     { key: "dashboard", label: "Dashboard" },
     { key: "trends", label: "Trends" },
@@ -215,6 +220,39 @@ export const MetricSummary = ({ activeTab, onTabChange }: MetricSummaryProps) =>
               onClick={() => {
                 void currentSummaryQuery.refetch();
                 void previousSummaryQuery.refetch();
+              }}
+              size="sm"
+              variant="outline"
+            >
+              <FiRefreshCw />
+              {translate("flowrate.refresh", { defaultValue: "Refresh" })}
+            </Button>
+          </HStack>
+        ) : undefined}
+
+        {activeTab === "trends" ? (
+          <HStack alignSelf={{ base: "stretch", md: "center" }}>
+            <NativeSelect.Root size="sm" width="150px">
+              <NativeSelect.Field
+                onChange={(event) => setTrendsTimeframe(event.currentTarget.value as FlowRateSummaryTimeframe)}
+                value={trendsTimeframe}
+              >
+                <option value="24h">
+                  {translate("flowrate.last24Hours", { defaultValue: "Last 24 hours" })}
+                </option>
+                <option value="7d">{translate("flowrate.last7Days", { defaultValue: "Last 7 days" })}</option>
+                <option value="30d">
+                  {translate("flowrate.last30Days", { defaultValue: "Last 30 days" })}
+                </option>
+              </NativeSelect.Field>
+              <NativeSelect.Indicator />
+            </NativeSelect.Root>
+
+            <Button
+              loading={isRefreshingTrends}
+              onClick={() => {
+                void trendsQuery.refetch();
+                void queryClient.invalidateQueries({ queryKey: ["cost_trends", 7] });
               }}
               size="sm"
               variant="outline"

@@ -25,17 +25,23 @@ from airflow.sdk import DAG, timezone
 
 
 def _demo_task() -> None:
+    # Allocate 32 MB block
     data = bytearray(32 * 1024 * 1024)
+    
+    # Counter
     total = 0
 
+    # CPU heavy loop
     for index in range(2000000):
         total += index % 99
 
     fd, path = tempfile.mkstemp(prefix="flowrate-demo-", suffix=".bin")
     try:
         with os.fdopen(fd, "wb") as handle:
+            # Write 32 MB data block to disk
             handle.write(data)
         with open(path, "rb") as handle:
+            # Read 32 MB data block, already cached (not from disk)
             handle.read()
     finally:
         os.remove(path)
