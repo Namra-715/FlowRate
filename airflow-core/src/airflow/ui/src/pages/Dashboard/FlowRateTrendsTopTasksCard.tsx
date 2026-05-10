@@ -53,14 +53,15 @@ const normalizeDagSearchText = (value: string): string =>
 
 export const FlowRateTrendsTopTasksCard = ({ isLoading, trends }: Props) => {
   const { t: translate } = useTranslation("dashboard");
+  const tr = (key: string, defaultValue: string) => translate(key, { defaultValue });
   const [selectedDagFilter, setSelectedDagFilter] = useState<string>(ALL_DAGS_VALUE);
 
   const dagFilterOptions = useMemo<Array<DagFilterOption>>(
     () => [
-      { label: translate("flowRateTrends.allDags"), value: ALL_DAGS_VALUE },
+      { label: tr("flowRateTrends.allDags", "All DAGs"), value: ALL_DAGS_VALUE },
       ...(trends?.top_dags ?? []).map((row) => ({ label: row.dag_id, value: row.dag_id })),
     ],
-    [trends?.top_dags, translate],
+    [trends?.top_dags, tr],
   );
 
   const selectedDagFilterOption =
@@ -83,7 +84,7 @@ export const FlowRateTrendsTopTasksCard = ({ isLoading, trends }: Props) => {
     <Box {...cardStyles} minW={0} p={4}>
       <Flex align="center" justify="space-between" mb={3}>
         <Text color="#CBD4F1" fontSize="lg" fontWeight={600}>
-          {translate("flowRateTrends.topTasksByEstimatedCost")}
+          {tr("flowRateTrends.topTasksByEstimatedCost", "Top Tasks by Estimated Cost")}
         </Text>
         <Box minW="220px" width="220px">
           <ReactSelect
@@ -125,13 +126,13 @@ export const FlowRateTrendsTopTasksCard = ({ isLoading, trends }: Props) => {
             }
             isSearchable
             menuPlacement="auto"
-            noOptionsMessage={() => translate("flowRateTrends.noDagsFound")}
+            noOptionsMessage={() => tr("flowRateTrends.noDagsFound", "No DAGs found")}
             onChange={(option: SingleValue<DagFilterOption>) =>
               setSelectedDagFilter(option?.value ?? ALL_DAGS_VALUE)
             }
             openMenuOnFocus
             options={dagFilterOptions}
-            placeholder={translate("flowRateTrends.allDags")}
+            placeholder={tr("flowRateTrends.allDags", "All DAGs")}
             value={selectedDagFilterOption}
           />
         </Box>
@@ -139,13 +140,13 @@ export const FlowRateTrendsTopTasksCard = ({ isLoading, trends }: Props) => {
 
       <Box overflowX="auto">
         <Grid columnGap={4} gridTemplateColumns="1.8fr 2fr 1.6fr 1.5fr 0.8fr 1fr 0.9fr 1.3fr" rowGap={3}>
-          <Text {...headerTextStyle}>{translate("flowRateTrends.taskId")}</Text>
-          <Text {...headerTextStyle}>{translate("flowRateTrends.dag")}</Text>
-          <Text {...headerTextStyle}>{translate("flowRateTrends.operator")}</Text>
-          <Text {...headerTextStyle}>{translate("flowRateTrends.avgDuration")}</Text>
-          <Text {...headerTextStyle}>{translate("flowRateTrends.cpuReq")}</Text>
-          <Text {...headerTextStyle}>{translate("flowRateTrends.memoryReq")}</Text>
-          <Text {...headerTextStyle}>{translate("flowRateTrends.avgCostPerRun")}</Text>
+          <Text {...headerTextStyle}>{tr("flowRateTrends.taskId", "TASK ID")}</Text>
+          <Text {...headerTextStyle}>{tr("flowRateTrends.dag", "DAG")}</Text>
+          <Text {...headerTextStyle}>{tr("flowRateTrends.operator", "OPERATOR")}</Text>
+          <Text {...headerTextStyle}>{tr("flowRateTrends.avgDuration", "AVG DURATION")}</Text>
+          <Text {...headerTextStyle}>{tr("flowRateTrends.cpuReq", "CPU REQ")}</Text>
+          <Text {...headerTextStyle}>{tr("flowRateTrends.memoryReq", "MEM REQ")}</Text>
+          <Text {...headerTextStyle}>{tr("flowRateTrends.avgCostPerRun", "AVG COST/RUN")}</Text>
           <Text {...headerTextStyle} textAlign="right" />
 
           {filteredTopTasks.map((row, index) => (
@@ -169,7 +170,7 @@ export const FlowRateTrendsTopTasksCard = ({ isLoading, trends }: Props) => {
                 px={2.5}
                 py={1}
               >
-                {row.operator ?? translate("flowRateTrends.unknown")}
+                {row.operator ?? tr("flowRateTrends.unknown", "Unknown")}
               </Badge>
               <Text {...cellTextStyle}>{formatDuration(row.avg_duration_seconds)}</Text>
               <Text {...cellTextStyle}>{row.avg_cpu_seconds.toFixed(1)}</Text>
@@ -188,7 +189,7 @@ export const FlowRateTrendsTopTasksCard = ({ isLoading, trends }: Props) => {
 
           {!isLoading && filteredTopTasks.length === 0 ? (
             <Text color="#7081AD" fontSize="13px">
-              {translate("flowRateTrends.noTaskMetrics")}
+                {tr("flowRateTrends.noTaskMetrics", "No task metrics found for this selection.")}
             </Text>
           ) : undefined}
         </Grid>

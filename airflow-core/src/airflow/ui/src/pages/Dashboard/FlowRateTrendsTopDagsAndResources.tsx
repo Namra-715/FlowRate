@@ -16,9 +16,10 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Badge, Box, Flex, Grid, HStack, NativeSelect, Text, VStack } from "@chakra-ui/react";
+import { Badge, Box, Flex, Grid, HStack, Link, NativeSelect, Text, VStack } from "@chakra-ui/react";
 import { Fragment, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import { Link as RouterLink } from "react-router-dom";
 
 import type { FlowRateSummaryTimeframe } from "src/queries/useFlowRateSummary";
 import type { FlowRateTrendsResponse } from "src/queries/useFlowRateTrends";
@@ -32,14 +33,6 @@ import {
   renderProgressTrack,
   statusStyles,
 } from "./FlowRateTrendsShared";
-
-const CLOUD_PROFILES = [
-  { cpuPrice: "0.048", label: "GCP n2-standard", memoryPrice: "0.006" },
-  { cpuPrice: "0.034", label: "GCP e2-standard", memoryPrice: "0.0046" },
-  { cpuPrice: "0.048", label: "AWS m5.large", memoryPrice: "0.006" },
-  { cpuPrice: "0.054", label: "AWS c5.large", memoryPrice: "0.0054" },
-  { cpuPrice: "0.048", label: "Azure D2s v3", memoryPrice: "0.006" },
-] as const;
 
 type Props = {
   readonly isLoading: boolean;
@@ -55,12 +48,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
   trends,
 }: Props) => {
   const { t: translate } = useTranslation("dashboard");
-  const cpuPercentageDisplay = Math.round(trends?.resource_split.cpu_percentage ?? 0);
-  const cpuPrice = Number(trends?.pricing.cpu_price_per_core_hour ?? 0).toString();
-  const memoryPrice = Number(trends?.pricing.memory_price_per_gib_hour ?? 0).toString();
-  const pricingLabel =
-    CLOUD_PROFILES.find((profile) => profile.cpuPrice === cpuPrice && profile.memoryPrice === memoryPrice)?.label ??
-    "Custom";
+  const tr = (key: string, defaultValue: string) => translate(key, { defaultValue });
   const maxDagCost = useMemo(
     () => Math.max(1, ...(trends?.top_dags.map((row) => row.estimated_cost) ?? [1])),
     [trends?.top_dags],
@@ -71,7 +59,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
       <Box {...cardStyles} minW={0} p={4}>
         <Flex align="center" justify="space-between" mb={3}>
           <Text color="#CBD4F1" fontSize="lg" fontWeight={600}>
-            {translate("flowRateTrends.topDagsByEstimatedCost")}
+            {tr("flowRateTrends.topDagsByEstimatedCost", "Top DAGs by Estimated Cost")}
           </Text>
 
           <NativeSelect.Root size="sm" width="130px">
@@ -80,9 +68,9 @@ export const FlowRateTrendsTopDagsAndResources = ({
               onChange={(event) => onTimeframeChange(event.currentTarget.value as FlowRateSummaryTimeframe)}
               value={timeframe}
             >
-              <option value="24h">{translate("flowRateTrends.last24Hours")}</option>
-              <option value="7d">{translate("flowRateTrends.last7Days")}</option>
-              <option value="30d">{translate("flowRateTrends.last30Days")}</option>
+              <option value="24h">{tr("flowRateTrends.last24Hours", "Last 24 hours")}</option>
+              <option value="7d">{tr("flowRateTrends.last7Days", "Last 7 days")}</option>
+              <option value="30d">{tr("flowRateTrends.last30Days", "Last 30 days")}</option>
             </NativeSelect.Field>
             <NativeSelect.Indicator />
           </NativeSelect.Root>
@@ -90,11 +78,11 @@ export const FlowRateTrendsTopDagsAndResources = ({
 
         <Box overflowX="auto">
           <Grid columnGap={4} gridTemplateColumns="2fr 0.8fr 1.2fr 1.1fr 0.9fr 1.6fr" rowGap={3}>
-            <Text {...headerTextStyle}>{translate("flowRateTrends.dagId")}</Text>
-            <Text {...headerTextStyle}>{translate("flowRateTrends.runs")}</Text>
-            <Text {...headerTextStyle}>{translate("flowRateTrends.avgDuration")}</Text>
-            <Text {...headerTextStyle}>{translate("flowRateTrends.status")}</Text>
-            <Text {...headerTextStyle}>{translate("flowRateTrends.estimatedCost")}</Text>
+            <Text {...headerTextStyle}>{tr("flowRateTrends.dagId", "DAG ID")}</Text>
+            <Text {...headerTextStyle}>{tr("flowRateTrends.runs", "RUNS")}</Text>
+            <Text {...headerTextStyle}>{tr("flowRateTrends.avgDuration", "AVG DURATION")}</Text>
+            <Text {...headerTextStyle}>{tr("flowRateTrends.status", "STATUS")}</Text>
+            <Text {...headerTextStyle}>{tr("flowRateTrends.estimatedCost", "EST.COST")}</Text>
             <Text {...headerTextStyle} textAlign="right" />
 
             {(trends?.top_dags ?? []).map((row) => (
@@ -136,7 +124,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
 
             {!isLoading && (trends?.top_dags ?? []).length === 0 ? (
               <Text color="#7081AD" fontSize="13px">
-                {translate("flowRateTrends.noDagMetrics")}
+                {tr("flowRateTrends.noDagMetrics", "No DAG metrics found for this window.")}
               </Text>
             ) : undefined}
           </Grid>
@@ -146,7 +134,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
       <VStack align="stretch" gap={3} minW={0}>
         <Box {...cardStyles} p={4}>
           <Text color="#CBD4F1" fontSize="lg" fontWeight={600} mb={4}>
-            {translate("flowRateTrends.resourceSplit")}
+            {tr("flowRateTrends.resourceSplit", "Resource Split")}
           </Text>
 
           <Flex align="center" justify="center" mb={4}>
@@ -173,7 +161,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
                 transform="translate(-50%, -50%)"
               >
                 <Text color="#CAD4F0" fontSize="26px" fontWeight={500} lineHeight={1}>
-                  {cpuPercentageDisplay}%
+                  {(trends?.resource_split.cpu_percentage ?? 0).toFixed(0)}%
                 </Text>
                 <Text
                   color="#5F6D92"
@@ -182,7 +170,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
                   letterSpacing="0.06em"
                   textTransform="uppercase"
                 >
-                  {translate("flowRateTrends.cpu")}
+                  {tr("flowRateTrends.cpu", "CPU")}
                 </Text>
               </Box>
             </Box>
@@ -193,7 +181,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
               <HStack gap={2}>
                 <Box backgroundColor="#4F88FF" borderRadius="2px" h="10px" w="10px" />
                 <Text color="#7081AD" fontSize="15px">
-                  {translate("flowRateTrends.cpuHours")}
+                  {tr("flowRateTrends.cpuHours", "CPU (vCPU-hr)")}
                 </Text>
               </HStack>
               <Text color="#B7C1DF" fontSize="30px" fontWeight={300} lineHeight={1}>
@@ -204,7 +192,7 @@ export const FlowRateTrendsTopDagsAndResources = ({
               <HStack gap={2}>
                 <Box backgroundColor="#8F68FF" borderRadius="2px" h="10px" w="10px" />
                 <Text color="#7081AD" fontSize="15px">
-                  {translate("flowRateTrends.memoryHours")}
+                  {tr("flowRateTrends.memoryHours", "Memory (GB-hr)")}
                 </Text>
               </HStack>
               <Text color="#B7C1DF" fontSize="30px" fontWeight={300} lineHeight={1}>
@@ -216,25 +204,27 @@ export const FlowRateTrendsTopDagsAndResources = ({
 
         <Box {...cardStyles} p={4}>
           <Text color="#5F6D92" fontSize="12px" letterSpacing="0.08em" mb={2} textTransform="uppercase">
-            {translate("flowRateTrends.pricingBasis")}
+            {tr("flowRateTrends.pricingBasis", "Pricing Basis")}
           </Text>
           <VStack align="stretch" gap={1}>
             <Text color="#7081AD" fontSize="16px">
               {translate("flowRateTrends.vcpuPrice", {
+                defaultValue: "${{value}} / vCPU-hr",
                 value: Number(trends?.pricing.cpu_price_per_core_hour ?? 0).toFixed(6),
               })}
             </Text>
             <Text color="#7081AD" fontSize="16px">
               {translate("flowRateTrends.memoryPrice", {
+                defaultValue: "${{value}} / GB-hr",
                 value: Number(trends?.pricing.memory_price_per_gib_hour ?? 0).toFixed(6),
               })}
             </Text>
           </VStack>
           <Text color="#5F6D92" fontSize="12px" mt={3}>
-            {pricingLabel}{" "}
-            <Text as="span" color="#4F88FF">
-              {translate("flowRateTrends.configure")}
-            </Text>
+            {tr("flowRateTrends.pricingModel", "GCP n2-standard")}{" "}
+            <Link asChild color="#4F88FF">
+              <RouterLink to="/configs/flowrate">{tr("flowRateTrends.configure", "configure ->")}</RouterLink>
+            </Link>
           </Text>
         </Box>
       </VStack>

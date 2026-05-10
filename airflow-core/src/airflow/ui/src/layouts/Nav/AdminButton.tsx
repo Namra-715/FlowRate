@@ -52,6 +52,11 @@ const links = [
     href: "/configs",
     title: "Config",
   },
+  {
+    href: "/configs/flowrate",
+    menuItem: "Config",
+    title: "FlowRateConfig",
+  },
 ];
 
 export const AdminButton = ({
@@ -61,13 +66,22 @@ export const AdminButton = ({
   readonly authorizedMenuItems: Array<MenuItem>;
   readonly externalViews: Array<NavItemResponse>;
 }) => {
-  const { t: translate } = useTranslation("common");
+  const { t: translate } = useTranslation(["common", "dashboard"]);
   const menuItems = links
-    .filter(({ title }) => authorizedMenuItems.includes(title as MenuItem))
+    .filter(({ menuItem, title }) => authorizedMenuItems.includes((menuItem ?? title) as MenuItem))
     .map((link) => (
       <Menu.Item asChild key={link.title} value={link.title}>
-        <RouterLink aria-label={translate(`admin.${link.title}`)} to={link.href}>
-          {translate(`admin.${link.title}`)}
+        <RouterLink
+          aria-label={
+            link.title === "FlowRateConfig"
+              ? translate("dashboard:flowrate.configurationTitle", { defaultValue: "FlowRate Configuration" })
+              : translate(`admin.${link.title}`)
+          }
+          to={link.href}
+        >
+          {link.title === "FlowRateConfig"
+            ? translate("dashboard:flowrate.configurationTitle", { defaultValue: "FlowRate Configuration" })
+            : translate(`admin.${link.title}`)}
         </RouterLink>
       </Menu.Item>
     ));
