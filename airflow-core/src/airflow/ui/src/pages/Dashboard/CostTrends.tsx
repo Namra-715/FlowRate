@@ -36,6 +36,8 @@ import { useTranslation } from "react-i18next";
 import { Line } from "react-chartjs-2";
 
 import { OpenAPI } from "openapi/requests/core/OpenAPI";
+import type { FlowRateSummaryTimeframe } from "src/queries/useFlowRateSummary";
+
 import { cardStyles, formatCurrency, headerTextStyle, renderProgressTrack } from "./FlowRateTrendsShared";
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Filler, Tooltip, Legend);
@@ -67,6 +69,12 @@ const buildFallbackCostTrends = (days: number): CostTrendsData => {
 
 const DAG_COLORS = ["#4F88FF", "#A855F7", "#F97316", "#22C55E", "#EF4444", "#06B6D4", "#EAB308"];
 
+const timeframeDays = {
+  "24h": 1,
+  "7d": 7,
+  "30d": 30,
+} as const satisfies Record<FlowRateSummaryTimeframe, number>;
+
 const useCostTrends = (days: number) =>
   useQuery<CostTrendsData>({
     queryFn: async () => {
@@ -90,9 +98,10 @@ const useCostTrends = (days: number) =>
     queryKey: ["cost_trends", days],
   });
 
-export const CostTrends = () => {
+export const CostTrends = ({ timeframe }: { readonly timeframe: FlowRateSummaryTimeframe }) => {
   const { t: translate } = useTranslation("dashboard");
-  const { data, isLoading } = useCostTrends(7);
+  const days = timeframeDays[timeframe];
+  const { data, isLoading } = useCostTrends(days);
 
   if (isLoading) {
     return (
@@ -102,7 +111,7 @@ export const CostTrends = () => {
     );
   }
 
-  const costTrendsData = data ?? buildFallbackCostTrends(7);
+  const costTrendsData = data ?? buildFallbackCostTrends(days);
   const { dag_summaries: dagSummaries, daily_totals: dailyTotals, dates } = costTrendsData;
   const topDags = dagSummaries.slice(0, 7);
   const grandTotal = dailyTotals.reduce((acc, cur) => acc + cur, 0);
@@ -136,10 +145,9 @@ export const CostTrends = () => {
     <Box>
       {/* Top row: Summary table + Avg cost per run */}
       <Grid gap={3} mb={3} templateColumns={{ base: "1fr", lg: "1.6fr 1fr" }}>
-        {/* 7-Day DAG Cost Summary */}
         <Box {...cardStyles} minW={0} overflow="hidden" p={4}>
           <Text color="#CBD4F1" fontSize="md" fontWeight={600} mb={3}>
-            7-Day DAG Cost Summary
+            {dates.length}-Day DAG Cost Summary
           </Text>
           <Box overflowX="auto">
             <Grid columnGap={4} gridTemplateColumns={`2fr repeat(${dates.length}, 1fr) 1fr`} rowGap={2}>

@@ -354,16 +354,14 @@ def flowrate_summary(
                 cpu_percentage=0.0,
                 memory_percentage=0.0,
             ),
-        )
+    )
 
     current_time = timezone.utcnow()
-    retention_start_date = current_time - timedelta(days=flowrate_configuration.retention_days)
-    effective_start_date = max(start_date, retention_start_date)
     permitted_dag_ids = cast("set[str]", readable_dags_filter.value)
 
     flowrate_filters = (
         FlowRateMetric.dag_id.in_(permitted_dag_ids),
-        func.coalesce(FlowRateMetric.start_date, current_time) >= effective_start_date,
+        func.coalesce(FlowRateMetric.start_date, current_time) >= start_date,
         func.coalesce(FlowRateMetric.end_date, current_time) <= func.coalesce(end_date, current_time),
     )
 
@@ -452,13 +450,11 @@ def flowrate_trends(
         )
 
     current_time = timezone.utcnow()
-    retention_start_date = current_time - timedelta(days=flowrate_configuration.retention_days)
-    effective_start_date = max(start_date, retention_start_date)
     permitted_dag_ids = cast("set[str]", readable_dags_filter.value)
 
     flowrate_filters = (
         FlowRateMetric.dag_id.in_(permitted_dag_ids),
-        func.coalesce(FlowRateMetric.start_date, current_time) >= effective_start_date,
+        func.coalesce(FlowRateMetric.start_date, current_time) >= start_date,
         func.coalesce(FlowRateMetric.end_date, current_time) <= func.coalesce(end_date, current_time),
     )
 

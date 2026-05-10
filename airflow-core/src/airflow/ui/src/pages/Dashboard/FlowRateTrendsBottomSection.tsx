@@ -16,8 +16,11 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { VStack } from "@chakra-ui/react";
+import { Button, HStack, VStack } from "@chakra-ui/react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
+import { FiRefreshCw } from "react-icons/fi";
 
 import { ErrorAlert } from "src/components/ErrorAlert";
 import type { FlowRateSummaryTimeframe } from "src/queries/useFlowRateSummary";
@@ -28,16 +31,40 @@ import { CostTrends } from "./CostTrends";
 import { FlowRateTrendsTopDagsAndResources } from "./FlowRateTrendsTopDagsAndResources";
 import { FlowRateTrendsTopTasksCard } from "./FlowRateTrendsTopTasksCard";
 
+const timeframeDays = {
+  "24h": 1,
+  "7d": 7,
+  "30d": 30,
+} as const satisfies Record<FlowRateSummaryTimeframe, number>;
+
 export const FlowRateTrendsBottomSection = () => {
+  const { t: translate } = useTranslation("dashboard");
+  const queryClient = useQueryClient();
   const [timeframe, setTimeframe] = useState<FlowRateSummaryTimeframe>("7d");
   const refetchInterval = useAutoRefresh({ checkPendingRuns: true });
   const trendsQuery = useFlowRateTrends({ refetchInterval, timeframe });
+  const days = timeframeDays[timeframe];
 
   return (
     <VStack align="stretch" gap={3} mt={4}>
+      <HStack justify="flex-end">
+        <Button
+          loading={trendsQuery.isFetching}
+          onClick={() => {
+            void trendsQuery.refetch();
+            void queryClient.invalidateQueries({ queryKey: ["cost_trends", days] });
+          }}
+          size="sm"
+          variant="outline"
+        >
+          <FiRefreshCw />
+          {translate("flowrate.refresh", { defaultValue: "Refresh" })}
+        </Button>
+      </HStack>
+
       <ErrorAlert error={trendsQuery.error} />
 
-      <CostTrends />
+      <CostTrends timeframe={timeframe} />
 
       <FlowRateTrendsTopDagsAndResources
         isLoading={trendsQuery.isLoading}

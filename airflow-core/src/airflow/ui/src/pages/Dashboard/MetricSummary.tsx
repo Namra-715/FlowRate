@@ -16,8 +16,7 @@
  * specific language governing permissions and limitations
  * under the License.
  */
-import { Box, Button, Flex, HStack, NativeSelect, Text, VStack } from "@chakra-ui/react";
-import { useQueryClient } from "@tanstack/react-query";
+import { Box, Button, Flex, HStack, NativeSelect, Text } from "@chakra-ui/react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { FiRefreshCw } from "react-icons/fi";
@@ -41,7 +40,6 @@ import {
 
 export const MetricSummary = () => {
   const { t: translate } = useTranslation("dashboard");
-  const queryClient = useQueryClient();
   const [timeframe, setTimeframe] = useState<FlowRateSummaryTimeframe>("7d");
   const refetchInterval = useAutoRefresh({ checkPendingRuns: true });
 
@@ -123,12 +121,6 @@ export const MetricSummary = () => {
   ];
 
   const isRefreshing = currentSummaryQuery.isFetching || previousSummaryQuery.isFetching;
-  const isRefreshingTrends = trendsQuery.isFetching;
-  const flowRateTabs: Array<{ key: FlowRateTab; label: string }> = [
-    { key: "dashboard", label: "Dashboard" },
-    { key: "trends", label: "Trends" },
-    { key: "configuration", label: "Configuration" },
-  ];
 
   return (
     <Box>
@@ -154,53 +146,19 @@ export const MetricSummary = () => {
             <NativeSelect.Indicator />
           </NativeSelect.Root>
 
-            <Button
-              loading={isRefreshing}
-              onClick={() => {
-                void currentSummaryQuery.refetch();
-                void previousSummaryQuery.refetch();
-              }}
-              size="sm"
-              variant="outline"
-            >
-              <FiRefreshCw />
-              {translate("flowrate.refresh", { defaultValue: "Refresh" })}
-            </Button>
-          </HStack>
-        ) : undefined}
-
-        {activeTab === "trends" ? (
-          <HStack alignSelf={{ base: "stretch", md: "center" }}>
-            <NativeSelect.Root size="sm" width="150px">
-              <NativeSelect.Field
-                onChange={(event) => setTrendsTimeframe(event.currentTarget.value as FlowRateSummaryTimeframe)}
-                value={trendsTimeframe}
-              >
-                <option value="24h">
-                  {translate("flowrate.last24Hours", { defaultValue: "Last 24 hours" })}
-                </option>
-                <option value="7d">{translate("flowrate.last7Days", { defaultValue: "Last 7 days" })}</option>
-                <option value="30d">
-                  {translate("flowrate.last30Days", { defaultValue: "Last 30 days" })}
-                </option>
-              </NativeSelect.Field>
-              <NativeSelect.Indicator />
-            </NativeSelect.Root>
-
-            <Button
-              loading={isRefreshingTrends}
-              onClick={() => {
-                void trendsQuery.refetch();
-                void queryClient.invalidateQueries({ queryKey: ["cost_trends", 7] });
-              }}
-              size="sm"
-              variant="outline"
-            >
-              <FiRefreshCw />
-              {translate("flowrate.refresh", { defaultValue: "Refresh" })}
-            </Button>
-          </HStack>
-        ) : undefined}
+          <Button
+            loading={isRefreshing}
+            onClick={() => {
+              void currentSummaryQuery.refetch();
+              void previousSummaryQuery.refetch();
+            }}
+            size="sm"
+            variant="outline"
+          >
+            <FiRefreshCw />
+            {translate("flowrate.refresh", { defaultValue: "Refresh" })}
+          </Button>
+        </HStack>
       </Flex>
 
       <ErrorAlert error={currentSummaryQuery.error ?? previousSummaryQuery.error} />
