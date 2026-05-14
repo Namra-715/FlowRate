@@ -1253,8 +1253,9 @@ def run(
                 return state, msg, error
 
             enable_cost_metrics = getattr(ti.task.dag, "enable_cost_metrics", False)
+            flowrate_enabled = bool(getattr(ti._ti_context_from_server, "flowrate_enabled", False))
             collector = None
-            if enable_cost_metrics:
+            if enable_cost_metrics and flowrate_enabled:
                 try:
                     from airflow.sdk.execution_time.resource_metrics import (
                         EXECUTION_PLATFORM_LOCAL,
