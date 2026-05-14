@@ -70,6 +70,7 @@ from airflow.models.taskreschedule import TaskReschedule
 from airflow.models.trigger import Trigger
 from airflow.models.xcom import XComModel
 from airflow.plugins.flowrate.cost_engine import persist_estimated_ti_cost
+from airflow.plugins.flowrate.persistence import _is_flowrate_enabled
 from airflow.serialization.definitions.assets import SerializedAsset, SerializedAssetUniqueKey
 from airflow.utils.sqlalchemy import get_dialect_name
 from airflow.utils.state import DagRunState, TaskInstanceState, TerminalTIState
@@ -276,6 +277,7 @@ def ti_run(
             connections=[],
             xcom_keys_to_clear=xcom_keys,
             should_retry=_is_eligible_to_retry(previous_state, ti.try_number, ti.max_tries),
+            flowrate_enabled=_is_flowrate_enabled(),
         )
 
         # Only set if they are non-null

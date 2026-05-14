@@ -392,6 +392,9 @@ class TIRunContext(BaseModel):
     should_retry: bool = False
     """If the ti encounters an error, whether it should enter retry or failed state."""
 
+    flowrate_enabled: bool = False
+    """Whether FlowRate collection and persistence should be enabled for this task run."""
+
 
 class PrevSuccessfulDagRunResponse(BaseModel):
     """Schema for response with previous successful DagRun information for Task Template Context."""
