@@ -53,6 +53,8 @@ The original project proposal focused on Kubernetes-based resource attribution. 
 
 ## System Architecture
 
+![FlowRate system architecture](docs/images/flowrate_architecture.jpeg)
+
 **Repository pattern:** The `flowrate_metric` table acts as a shared repository that decouples metric collection from metric consumption. The worker process writes metrics via the Execution API without knowing anything about the dashboard. The dashboard reads metrics without knowing anything about how tasks are executed. This gives the two subsystems low coupling and allows them to be developed and tested independently. The main risk of the repository pattern is that the shared data schema becomes a bottleneck: changes to `flowrate_metric` columns affect all producers and consumers simultaneously.
 
 The local demonstration environment uses containers (Docker Compose) to isolate service dependencies and avoid configuration conflicts between the scheduler, worker, API server, and database. Each service runs in its own container. 
