@@ -53,9 +53,131 @@ The original project proposal focused on Kubernetes-based resource attribution. 
 
 ## System Architecture
 
-FlowRate follows Airflow's existing execution boundaries. DAG authors opt into metrics by setting `enable_cost_metrics=True`. When an opted-in task runs, the Task SDK runtime collector records process-level resource usage such as CPU seconds, peak RSS memory, average CPU cores, and disk I/O. When the task reaches a terminal state, those metrics are sent through Airflow's existing Execution API path instead of bypassing Airflow's normal worker-to-API communication model.
+**Repository pattern:** The `flowrate_metric` table acts as a shared repository that decouples metric collection from metric consumption. The worker process writes metrics via the Execution API without knowing anything about the dashboard. The dashboard reads metrics without knowing anything about how tasks are executed. This gives the two subsystems low coupling and allows them to be developed and tested independently. The main risk of the repository pattern is that the shared data schema becomes a bottleneck: changes to `flowrate_metric` columns affect all producers and consumers simultaneously.
 
-On the backend, the API server stores the resource fields on the task instance and writes a corresponding `flowrate_metric` row in the metadata database. The FlowRate cost engine uses the stored runtime metrics and configured CPU/memory prices to estimate task cost. Dashboard endpoints then aggregate those persisted rows by DAG, task, run, and time window. The React UI reads those endpoints to render the home page summary, Trends page, configuration page, DAG list cost values, and run/task-level metric views.
+The local demonstration environment uses containers (Docker Compose) to isolate service dependencies and avoid configuration conflicts between the scheduler, worker, API server, and database. Each service runs in its own container. 
+
+### Subsystem Decomposition
+
+This diagram shows the subsystems that make up FlowRate and their compile-time dependencies. An arrow from A to B means A imports from or calls into B. The supervisor process sits between the task runner and the Execution API: the task runner sends an IPC message to the supervisor, and the supervisor makes the HTTP PATCH request.
+
+```mermaid
+flowchart TD
+    subgraph TaskSDK ["Task SDK (worker process)"]
+        RC["LocalResourceCollector\nresource_metrics.py"]
+        TR["Task runner\ntask_runner.py"]
+        SUP["Supervisor\nsupervisor.py"]
+    end
+
+    subgraph ExecAPI ["Execution API"]
+        EDM["State payload datamodels\ntaskinstance.py"]
+        ER["State PATCH route\ntask_instances.py"]
+    end
+
+    subgraph Models ["Core Models"]
+        FRM["FlowRateMetric ORM\nflowrate_metric.py"]
+        MIG["Alembic migration\n0108_3_3_0_...py"]
+    end
+
+    subgraph Plugin ["FlowRate Plugin"]
+        CE["Cost engine\ncost_engine.py"]
+        PE["Persistence helpers\npersistence.py"]
+    end
+
+    subgraph DashAPI ["Dashboard API"]
+        DDM["Response datamodels\nui/dashboard.py"]
+        DR["Dashboard routes\nui/dashboard.py"]
+    end
+
+    subgraph ReactUI ["React UI"]
+        COMP["Dashboard components\nDashboard.tsx, CostTrends.tsx, ..."]
+        HOOKS["React Query hooks\nuseFlowRate*.ts"]
+    end
+
+    TR --> RC
+    TR --> SUP
+    SUP --> ER
+    ER --> EDM
+    ER --> CE
+    CE --> PE
+    PE --> FRM
+    DR --> PE
+    DR --> DDM
+    HOOKS --> DR
+    COMP --> HOOKS
+```
+
+The Task SDK has no dependency on the FlowRate plugin or the `FlowRateMetric` model. It only knows how to collect metrics and send them to the Execution API via the supervisor. The Dashboard API has no dependency on the Task SDK. Both sides only meet at the shared database, which is the repository pattern in action.
+
+### Runtime Sequence
+
+This diagram traces the two main runtime paths: metric collection during task execution (write path) and metric retrieval by the dashboard (read path). The supervisor is shown explicitly because it is the process that actually makes the HTTP PATCH call, not the task runner directly. 
+
+```mermaid
+sequenceDiagram
+    participant Worker as Task Runner
+    participant Supervisor as Supervisor
+    participant ExecAPI as Execution API
+    participant DB as Metadata DB
+    participant CoreAPI as Dashboard API
+    participant UI as Airflow UI
+
+    Worker->>Worker: LocalResourceCollector.start()
+    Worker->>Worker: background thread samples every 2 s
+    Worker->>Worker: LocalResourceCollector.stop() returns metrics dict
+    Worker->>Supervisor: SucceedTask(cpu_seconds, max_rss_mb, ...) via local IPC
+    Supervisor->>ExecAPI: PATCH /task-instances/:id/state (TISuccessStatePayload)
+    ExecAPI->>DB: UPDATE task_instance SET cpu_seconds, max_rss_mb, ...
+    ExecAPI->>DB: persist_estimated_ti_cost(ti) INSERT INTO flowrate_metric
+    UI->>CoreAPI: GET /ui/dashboard/flowrate_summary?start_date=...
+    CoreAPI->>DB: SELECT ... FROM flowrate_metric WHERE dag_id IN (readable_dags)
+    CoreAPI->>UI: FlowRateSummaryResponse
+    UI->>CoreAPI: GET /ui/dashboard/flowrate_trends
+    CoreAPI->>UI: FlowRateTrendsResponse
+```
+
+The scheduler is excluded because it has no role in FlowRate. The worker and dashboard API never communicate directly; they share only the database.
+
+### Deployment
+This diagram shows the Docker Compose containers in the local demo environment and which components run in each. The supervisor process within the worker container is the one that sends the PATCH request to the API server, not the task runner directly.
+
+```mermaid
+flowchart LR
+    subgraph Browser ["User browser"]
+        UI["React UI"]
+    end
+
+    subgraph APIServer ["airflow-apiserver container"]
+        COREAPI["Dashboard API routes"]
+        EXECAPI["Execution API routes"]
+    end
+
+    subgraph WorkerNode ["airflow-worker container"]
+        SDK["Task runner\nLocalResourceCollector"]
+        SUP["Supervisor process"]
+    end
+
+    subgraph DBNode ["postgres container"]
+        PG["PostgreSQL\nflowrate_metric table\ntask_instance table"]
+    end
+
+    subgraph Scheduler ["airflow-scheduler container"]
+        SCHED["Airflow Scheduler\n(no FlowRate code)"]
+    end
+
+    subgraph DagProcessor ["airflow-dag-processor container"]
+        DP["DAG file processor\n(no FlowRate code)"]
+    end
+
+    UI -->|HTTP GET /ui/dashboard/flowrate_*| COREAPI
+    SDK -->|SucceedTask via local IPC| SUP
+    SUP -->|PATCH /task-instances/:id/state| EXECAPI
+    COREAPI -->|SQL SELECT| PG
+    EXECAPI -->|SQL INSERT / UPDATE| PG
+    SCHED -->|SQL read/write DAG runs| PG
+```
+
+The `airflow-local/` stack is a development and demonstration environment and is not hardened for production use. For production, the API server and worker nodes should be deployed with appropriate secrets management, TLS, and access controls. 
 
 ## Important Files
 
