@@ -9,9 +9,11 @@
 
 FlowRate adds resource usage and estimated cost visibility to Apache Airflow. For DAGs that opt in, FlowRate records task-level CPU time, peak memory, average CPU cores, and disk I/O, then shows cost summaries in the Airflow UI. 
 
-FlowRate appears in three places:
+FlowRate appears in five places:
 
 - **Home page:** summary cards for total estimated cost, tasks tracked, average cost per DAG run, and CPU/memory split
+- **DAGs list:** estimated cost badge on each DAG card
+- **Run and task detail views:** per-task resource metrics and run-level cost totals
 - **Trends page:** detailed cost trends, top DAGs, top tasks, resource split, and pricing basis
 - **Admin menu:** FlowRate configuration for enablement and pricing
 
