@@ -35,21 +35,21 @@ The original project proposal focused on Kubernetes-based resource attribution. 
 
 | ID | Preliminary Requirement | Final Status |
 |---|---|---|
-| FR-1 | Our system will attribute each Airflow task instance to a corresponding Kubernetes execution unit while running under a Kubernetes-based execution pattern | Revised with client approval. The final implementation attributes metrics directly to Airflow task instances through the Task SDK runtime path. Kubernetes pod attribution is not included in this release. |
-| FR-2 | Our system will capture task execution timing for each task instance | Delivered |
-| FR-3 | Our system will obtain per-task resource request values (CPU, memory) from the Kubernetes pod specification for the attributed unit | Revised with client approval. The final implementation measures CPU seconds, peak RSS memory, average CPU cores, and disk I/O from the task process instead of reading Kubernetes pod requests. |
-| FR-4 | Our system will compute an estimated cost for each task instance using: runtime duration, requested resources, and user-configurable pricing parameters (e.g. $ per GB per hour) | Delivered with revised inputs. See above for how cost is computed. |
-| FR-5 | Our system will aggregate estimated costs and runtime both per DAG run (by summing across tasks in a run) and per DAG over a selected time window (e.g. last 24 hours) | Delivered |
-| FR-6 | Our system will persist task-level and aggregated metrics in a database table for up to one week so that results remain available after task completion and restarts | Partially delivered. Task-level FlowRate rows are persisted in `flowrate_metric`, but there is no automatic cleanup job for old rows yet. |
-| FR-7 | Our system will provide a FlowRate analytics view accessible from the Airflow UI that shall display a KPI summary including: total estimated cost, count of tasks tracked, average cost per DAG run, and the percentage split between CPU cost and memory cost, all scoped to a user-selected time window. | Delivered |
+| FR-1 | Our system shall attribute each Airflow task instance to a corresponding Kubernetes execution unit while running under a Kubernetes-based execution pattern | Revised with client approval. The final implementation attributes metrics directly to Airflow task instances through the Task SDK runtime path. Kubernetes pod attribution is not included in this release. |
+| FR-2 | Our system shall capture task execution timing for each task instance | Delivered |
+| FR-3 | Our system shall obtain per-task resource request values (CPU, memory) from the Kubernetes pod specification for the attributed unit | Revised with client approval. The final implementation measures CPU seconds, peak RSS memory, average CPU cores, and disk I/O from the task process instead of reading Kubernetes pod requests. |
+| FR-4 | Our system shall compute an estimated cost for each task instance using: runtime duration, requested resources, and user-configurable pricing parameters (e.g. $ per GB per hour) | Delivered with revised inputs. See above for how cost is computed. |
+| FR-5 | Our system shall aggregate estimated costs and runtime both per DAG run (by summing across tasks in a run) and per DAG over a selected time window (e.g. last 24 hours) | Delivered |
+| FR-6 | Our system shall persist task-level and aggregated metrics in a database table for up to one week so that results remain available after task completion and restarts | Partially delivered. Task-level FlowRate rows are persisted in `flowrate_metric`, but there is no automatic cleanup job for old rows yet. |
+| FR-7 | Our system shall provide a FlowRate analytics view accessible from the Airflow UI that shall display a KPI summary including: total estimated cost, count of tasks tracked, average cost per DAG run, and the percentage split between CPU cost and memory cost, all scoped to a user-selected time window. | Delivered |
 | FR-8 | The analytics view shall provide a trend views including: top DAGs ranked by total estimated cost, top tasks ranked by average cost per run, a daily cost trend over a selected date range, and a per-DAG cost breakdown table. | Delivered |
-| FR-9 | Our system will provide a configuration mechanism to enable/disable FlowRate and set pricing parameter (disabled by default) | Delivered |
+| FR-9 | Our system shall provide a configuration mechanism to enable/disable FlowRate and set pricing parameter (disabled by default) | Delivered |
 
 ### Non-Functional Requirements
 | ID | Preliminary Requirement | Final Status |
 |---|---|---|
-| NFR-1 | FlowRate is opt-in and additive. Existing DAGs should continue to run normally. | Delivered |
-| NFR-2 | The dashboard UI should respond to user interactions within a time consistent with the existing Airflow UI (no perceptible increase in page load time relative to non-FlowRate dashboard tabs). | Delivered |
+| NFR-1 | FlowRate shall be opt-in and additive. Existing DAGs shall continue to run normally. | Delivered |
+| NFR-2 | The dashboard UI shall respond to user interactions within a time consistent with the existing Airflow UI. | Delivered |
 
 ## System Architecture
 
