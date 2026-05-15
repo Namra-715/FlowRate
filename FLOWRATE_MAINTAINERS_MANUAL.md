@@ -35,21 +35,149 @@ The original project proposal focused on Kubernetes-based resource attribution. 
 
 | ID | Preliminary Requirement | Final Status |
 |---|---|---|
-| FR-1 | Our system will attribute each Airflow task instance to a corresponding Kubernetes execution unit while running under a Kubernetes-based execution pattern | Revised with client approval. The final implementation attributes metrics directly to Airflow task instances through the Task SDK runtime path. Kubernetes pod attribution is not included in this release. |
-| FR-2 | Our system will capture task execution timing for each task instance | Delivered |
-| FR-3 | Our system will obtain per-task resource request values (CPU, memory) from the Kubernetes pod specification for the attributed unit | Revised with client approval. The final implementation measures CPU seconds, peak RSS memory, average CPU cores, and disk I/O from the task process instead of reading Kubernetes pod requests. |
-| FR-4 | Our system will compute an estimated cost for each task instance using: runtime duration, requested resources, and user-configurable pricing parameters (e.g. $ per GB per hour) | Delivered with revised inputs. See above for how cost is computed. |
-| FR-5 | Our system will aggregate estimated costs and runtime both per DAG run (by summing across tasks in a run) and per DAG over a selected time window (e.g. last 24 hours) | Delivered |
-| FR-6 | Our system will persist task-level and aggregated metrics in a database table for up to one week so that results remain available after task completion and restarts | Partially delivered. Task-level FlowRate rows are persisted in `flowrate_metric`, but there is no automatic cleanup job for old rows yet. |
-| FR-7 | Our system will provide a FlowRate analytics view accessible from the Airflow UI that displays: top expensive DAGs in a time window, top expensive tasks in a time window, drilldown for a selected DAG/DAG run to see task-level breakdown. | Delivered |
-| FR-8 | Our system will provide a configuration mechanism to enable/disable FlowRate and set pricing parameter (disabled by default) | Delivered |
-| FR-9 | FlowRate is opt-in and additive. Existing DAGs should continue to run normally. | Delivered |
+| FR-1 | Our system shall attribute each Airflow task instance to a corresponding Kubernetes execution unit while running under a Kubernetes-based execution pattern | Revised with client approval. The final implementation attributes metrics directly to Airflow task instances through the Task SDK runtime path. Kubernetes pod attribution is not included in this release. |
+| FR-2 | Our system shall capture task execution timing for each task instance | Delivered |
+| FR-3 | Our system shall obtain per-task resource request values (CPU, memory) from the Kubernetes pod specification for the attributed unit | Revised with client approval. The final implementation measures CPU seconds, peak RSS memory, average CPU cores, and disk I/O from the task process instead of reading Kubernetes pod requests. |
+| FR-4 | Our system shall compute an estimated cost for each task instance using: runtime duration, requested resources, and user-configurable pricing parameters (e.g. $ per GB per hour) | Delivered with revised inputs. See above for how cost is computed. |
+| FR-5 | Our system shall aggregate estimated costs and runtime both per DAG run (by summing across tasks in a run) and per DAG over a selected time window (e.g. last 24 hours) | Delivered |
+| FR-6 | Our system shall persist task-level and aggregated metrics in a database table for up to one week so that results remain available after task completion and restarts | Partially delivered. Task-level FlowRate rows are persisted in `flowrate_metric`, but there is no automatic cleanup job for old rows yet. |
+| FR-7 | Our system shall provide a FlowRate analytics view accessible from the Airflow UI that shall display a KPI summary including: total estimated cost, count of tasks tracked, average cost per DAG run, and the percentage split between CPU cost and memory cost, all scoped to a user-selected time window. | Delivered |
+| FR-8 | The analytics view shall provide a trend views including: top DAGs ranked by total estimated cost, top tasks ranked by average cost per run, a daily cost trend over a selected date range, and a per-DAG cost breakdown table. | Delivered |
+| FR-9 | Our system shall provide a configuration mechanism to enable/disable FlowRate and set pricing parameter (disabled by default) | Delivered |
+
+### Non-Functional Requirements
+| ID | Preliminary Requirement | Final Status |
+|---|---|---|
+| NFR-1 |  FlowRate shall be opt-in per DAG. A DAG without `enable_cost_metrics=True` shall produce zero rows in `flowrate_metric`, and its task wall-clock time shall not increase by more than 1% compared to a baseline run with FlowRate installed but not opted in. | Partially delivered. Non-opted-in tasks still produce a `flowrate_metric` row with null metrics when FlowRate is globally enabled. |
+| NFR-2 | Dashboard API endpoints shall respond within 2 seconds for queries spanning up to 30 days of data in a deployment with up to 50,000 rows in `flowrate_metric`. | Delivered |
 
 ## System Architecture
 
-FlowRate follows Airflow's existing execution boundaries. DAG authors opt into metrics by setting `enable_cost_metrics=True`. When an opted-in task runs, the Task SDK runtime collector records process-level resource usage such as CPU seconds, peak RSS memory, average CPU cores, and disk I/O. When the task reaches a terminal state, those metrics are sent through Airflow's existing Execution API path instead of bypassing Airflow's normal worker-to-API communication model.
+**Repository pattern:** The `flowrate_metric` table acts as a shared repository that decouples metric collection from metric consumption. The worker process writes metrics via the Execution API without knowing anything about the dashboard. The dashboard reads metrics without knowing anything about how tasks are executed. This gives the two subsystems low coupling and allows them to be developed and tested independently. The main risk of the repository pattern is that the shared data schema becomes a bottleneck: changes to `flowrate_metric` columns affect all producers and consumers simultaneously.
 
-On the backend, the API server stores the resource fields on the task instance and writes a corresponding `flowrate_metric` row in the metadata database. The FlowRate cost engine uses the stored runtime metrics and configured CPU/memory prices to estimate task cost. Dashboard endpoints then aggregate those persisted rows by DAG, task, run, and time window. The React UI reads those endpoints to render the home page summary, Trends page, configuration page, DAG list cost values, and run/task-level metric views.
+The local demonstration environment uses containers (Docker Compose) to isolate service dependencies and avoid configuration conflicts between the scheduler, worker, API server, and database. Each service runs in its own container. 
+
+### Subsystem Decomposition
+
+This diagram shows the subsystems that make up FlowRate and their compile-time dependencies. An arrow from A to B means A imports from or calls into B. The supervisor process sits between the task runner and the Execution API: the task runner sends an IPC message to the supervisor, and the supervisor makes the HTTP PATCH request.
+
+```mermaid
+flowchart TD
+    subgraph TaskSDK ["Task SDK (worker process)"]
+        RC["LocalResourceCollector\nresource_metrics.py"]
+        TR["Task runner\ntask_runner.py"]
+        SUP["Supervisor\nsupervisor.py"]
+    end
+
+    subgraph ExecAPI ["Execution API"]
+        EDM["State payload datamodels\ntaskinstance.py"]
+        ER["State PATCH route\ntask_instances.py"]
+    end
+
+    subgraph Models ["Core Models"]
+        FRM["FlowRateMetric ORM\nflowrate_metric.py"]
+        MIG["Alembic migration\n0108_3_3_0_...py"]
+    end
+
+    subgraph Plugin ["FlowRate Plugin"]
+        CE["Cost engine\ncost_engine.py"]
+        PE["Persistence helpers\npersistence.py"]
+    end
+
+    subgraph DashAPI ["Dashboard API"]
+        DDM["Response datamodels\nui/dashboard.py"]
+        DR["Dashboard routes\nui/dashboard.py"]
+    end
+
+    subgraph ReactUI ["React UI"]
+        COMP["Dashboard components\nDashboard.tsx, CostTrends.tsx, ..."]
+        HOOKS["React Query hooks\nuseFlowRate*.ts"]
+    end
+
+    TR --> RC
+    TR --> SUP
+    SUP --> ER
+    ER --> EDM
+    ER --> CE
+    CE --> PE
+    PE --> FRM
+    DR --> PE
+    DR --> DDM
+    HOOKS --> DR
+    COMP --> HOOKS
+```
+
+The Task SDK has no dependency on the FlowRate plugin or the `FlowRateMetric` model. It only knows how to collect metrics and send them to the Execution API via the supervisor. The Dashboard API has no dependency on the Task SDK. Both sides only meet at the shared database, which is the repository pattern in action.
+
+### Runtime Sequence
+
+This diagram traces the two main runtime paths: metric collection during task execution (write path) and metric retrieval by the dashboard (read path). The supervisor is shown explicitly because it is the process that actually makes the HTTP PATCH call, not the task runner directly. 
+
+```mermaid
+sequenceDiagram
+    participant Worker as Task Runner
+    participant Supervisor as Supervisor
+    participant ExecAPI as Execution API
+    participant DB as Metadata DB
+    participant CoreAPI as Dashboard API
+    participant UI as Airflow UI
+
+    Worker->>Worker: LocalResourceCollector.start()
+    Worker->>Worker: background thread samples every 2 s
+    Worker->>Worker: LocalResourceCollector.stop() returns metrics dict
+    Worker->>Supervisor: SucceedTask(cpu_seconds, max_rss_mb, ...) via local IPC
+    Supervisor->>ExecAPI: PATCH /task-instances/:id/state (TISuccessStatePayload)
+    ExecAPI->>DB: UPDATE task_instance SET cpu_seconds, max_rss_mb, ...
+    ExecAPI->>DB: persist_estimated_ti_cost(ti) INSERT INTO flowrate_metric
+    UI->>CoreAPI: GET /ui/dashboard/flowrate_summary?start_date=...
+    CoreAPI->>DB: SELECT ... FROM flowrate_metric WHERE dag_id IN (readable_dags)
+    CoreAPI->>UI: FlowRateSummaryResponse
+    UI->>CoreAPI: GET /ui/dashboard/flowrate_trends
+    CoreAPI->>UI: FlowRateTrendsResponse
+```
+
+The scheduler is excluded because it has no role in FlowRate. The worker and dashboard API never communicate directly; they share only the database.
+
+### Deployment
+This diagram shows the Docker Compose containers in the local demo environment and which components run in each. The supervisor process within the worker container is the one that sends the PATCH request to the API server, not the task runner directly.
+
+```mermaid
+flowchart LR
+    subgraph Browser ["User browser"]
+        UI["React UI"]
+    end
+
+    subgraph APIServer ["airflow-apiserver container"]
+        COREAPI["Dashboard API routes"]
+        EXECAPI["Execution API routes"]
+    end
+
+    subgraph WorkerNode ["airflow-worker container"]
+        SDK["Task runner\nLocalResourceCollector"]
+        SUP["Supervisor process"]
+    end
+
+    subgraph DBNode ["postgres container"]
+        PG["PostgreSQL\nflowrate_metric table\ntask_instance table"]
+    end
+
+    subgraph Scheduler ["airflow-scheduler container"]
+        SCHED["Airflow Scheduler\n(no FlowRate code)"]
+    end
+
+    subgraph DagProcessor ["airflow-dag-processor container"]
+        DP["DAG file processor\n(no FlowRate code)"]
+    end
+
+    UI -->|HTTP GET /ui/dashboard/flowrate_*| COREAPI
+    SDK -->|SucceedTask via local IPC| SUP
+    SUP -->|PATCH /task-instances/:id/state| EXECAPI
+    COREAPI -->|SQL SELECT| PG
+    EXECAPI -->|SQL INSERT / UPDATE| PG
+    SCHED -->|SQL read/write DAG runs| PG
+```
+
+The `airflow-local/` stack is a development and demonstration environment and is not hardened for production use. For production, the API server and worker nodes should be deployed with appropriate secrets management, TLS, and access controls. 
 
 ## Important Files
 
