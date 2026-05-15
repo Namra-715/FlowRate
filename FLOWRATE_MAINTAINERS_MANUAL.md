@@ -44,8 +44,12 @@ The original project proposal focused on Kubernetes-based resource attribution. 
 | FR-7 | Our system will provide a FlowRate analytics view accessible from the Airflow UI that shall display a KPI summary including: total estimated cost, count of tasks tracked, average cost per DAG run, and the percentage split between CPU cost and memory cost, all scoped to a user-selected time window. | Delivered |
 | FR-8 | The analytics view shall provide a trend views including: top DAGs ranked by total estimated cost, top tasks ranked by average cost per run, a daily cost trend over a selected date range, and a per-DAG cost breakdown table. | Delivered |
 | FR-9 | Our system will provide a configuration mechanism to enable/disable FlowRate and set pricing parameter (disabled by default) | Delivered |
-| FR-10 | FlowRate is opt-in and additive. Existing DAGs should continue to run normally. | Delivered |
 
+### Non-Functional Requirements
+| ID | Preliminary Requirement | Final Status |
+|---|---|---|
+| NFR-1 | FlowRate is opt-in and additive. Existing DAGs should continue to run normally. | Delivered |
+| NFR-2 | The dashboard UI should respond to user interactions within a time consistent with the existing Airflow UI (no perceptible increase in page load time relative to non-FlowRate dashboard tabs). | Delivered |
 
 ## System Architecture
 
