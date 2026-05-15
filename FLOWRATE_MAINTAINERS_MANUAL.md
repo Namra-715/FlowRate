@@ -48,8 +48,8 @@ The original project proposal focused on Kubernetes-based resource attribution. 
 ### Non-Functional Requirements
 | ID | Preliminary Requirement | Final Status |
 |---|---|---|
-| NFR-1 | FlowRate shall be opt-in and additive. Existing DAGs shall continue to run normally. | Delivered |
-| NFR-2 | The dashboard UI shall respond to user interactions within a time consistent with the existing Airflow UI. | Delivered |
+| NFR-1 |  FlowRate shall be opt-in per DAG. A DAG without `enable_cost_metrics=True` shall produce zero rows in `flowrate_metric`, and its task wall-clock time shall not increase by more than 1% compared to a baseline run with FlowRate installed but not opted in. | Partially delivered. Non-opted-in tasks still produce a `flowrate_metric` row with null metrics when FlowRate is globally enabled. |
+| NFR-2 | Dashboard API endpoints shall respond within 2 seconds for queries spanning up to 30 days of data in a deployment with up to 50,000 rows in `flowrate_metric`. | Delivered |
 
 ## System Architecture
 
